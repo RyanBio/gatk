@@ -212,6 +212,7 @@ public class StructuralVariationDiscoveryPipelineSpark extends GATKSparkTool {
         return new SvDiscoveryInputMetaData(ctx, discoverStageArgs, evidenceAndAssemblyArgs.crossContigsToIgnoreFile,
                 outputPrefixWithSampleName,
                 assembledEvidenceResults.getReadMetadata(), assembledEvidenceResults.getAssembledIntervals(),
+                assembledEvidenceResults.getAlignedAssemblyOrExcuseList(),
                 makeEvidenceLinkTree(assembledEvidenceResults.getEvidenceTargetLinks()),
                 cnvCallsBroadcast, getHeaderForReads(), getReference(), localLogger);
     }
@@ -291,8 +292,31 @@ public class StructuralVariationDiscoveryPipelineSpark extends GATKSparkTool {
                         .filter(AlignedAssemblyOrExcuse::isNotFailure)
                         .flatMap(aa -> aa.toSAMStreamForAlignmentsOfThisAssembly(headerForReads, refNames, contigAlignmentsReadGroup))
                         .map(SAMRecordToGATKReadAdapter::new)
+<<<<<<< HEAD
                         .collect(Collectors.toList())
         );
+=======
+                        .collect(Collectors.toList());
+        JavaRDD<GATKRead> reads = ctx.parallelize(readsList);
+
+        final String sampleId = svDiscoveryInputData.sampleId;
+        final Broadcast<ReferenceMultiSource> referenceBroadcast = svDiscoveryInputData.referenceBroadcast;
+        final Broadcast<SVIntervalTree<VariantContext>> cnvCallsBroadcast = svDiscoveryInputData.cnvCallsBroadcast;
+
+        final SvDiscoveryInputData updatedSvDiscoveryInputData =
+                new SvDiscoveryInputData(sampleId, svDiscoveryInputData.discoverStageArgs,
+                        svDiscoveryInputData.outputPath + "experimentalInterpretation_",
+                        svDiscoveryInputData.metadata, svDiscoveryInputData.assembledIntervals,
+                        svDiscoveryInputData.intervalAssemblies,
+                        svDiscoveryInputData.evidenceTargetLinks, reads, svDiscoveryInputData.toolLogger,
+                        referenceBroadcast, referenceSequenceDictionaryBroadcast, headerBroadcast, cnvCallsBroadcast);
+
+        EnumMap<AssemblyContigAlignmentSignatureClassifier.RawTypes, JavaRDD<AssemblyContigWithFineTunedAlignments>>
+                contigsByPossibleRawTypes =
+                SvDiscoverFromLocalAssemblyContigAlignmentsSpark.preprocess(updatedSvDiscoveryInputData, nonCanonicalChromosomeNamesFile,true);
+
+        SvDiscoverFromLocalAssemblyContigAlignmentsSpark.dispatchJobs(contigsByPossibleRawTypes, updatedSvDiscoveryInputData);
+>>>>>>> add a score for local assemblies
     }
 
     /**
@@ -352,7 +376,7 @@ public class StructuralVariationDiscoveryPipelineSpark extends GATKSparkTool {
                                         .mapToObj(contigIdx ->
                                                 BwaMemAlignmentUtils.toSAMStreamForRead(
                                                         AlignedAssemblyOrExcuse.formatContigName(assemblyId, contigIdx),
-                                                        assembly.getContig(contigIdx).getSequence(),
+                                                        assembly.getContig(contigIdx).getSequence(), null,
                                                         allAlignmentsOfThisAssembly.get(contigIdx),
                                                         cleanHeader, refNames,
                                                         new SAMReadGroupRecord(SVUtils.GATKSV_CONTIG_ALIGNMENTS_READ_GROUP_ID)
