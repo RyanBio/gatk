@@ -138,7 +138,7 @@ public final class SvDiscoverFromLocalAssemblyContigAlignmentsSpark extends GATK
         final Broadcast<SVIntervalTree<VariantContext>> cnvCallsBroadcast =
                 StructuralVariationDiscoveryPipelineSpark.broadcastCNVCalls(ctx, getHeaderForReads(),
                         discoverStageArgs.cnvCallsFile);
-        final String outputPrefixWithSampleName = outputPrefix + SVUtils.getSampleId(getHeaderForReads()) + "_";
+        final String outputPrefixWithSampleName = outputPrefix + (outputPrefix.endsWith("/") ? "": "_") + SVUtils.getSampleId(getHeaderForReads()) + "_";
         final SvDiscoveryInputMetaData svDiscoveryInputMetaData =
                 new SvDiscoveryInputMetaData(ctx, discoverStageArgs, nonCanonicalChromosomeNamesFile, outputPrefixWithSampleName,
                         null, null, null,

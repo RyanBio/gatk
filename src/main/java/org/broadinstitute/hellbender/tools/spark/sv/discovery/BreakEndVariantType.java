@@ -21,6 +21,19 @@ import static org.broadinstitute.hellbender.tools.spark.sv.utils.GATKSVVCFConsta
 
 public abstract class BreakEndVariantType extends SvType {
 
+    // TODO: 5/25/18 this class is to be expanded to support the following types
+    enum SupportedType {
+        INTRA_CHR_STRAND_SWITCH_55,// intra-chromosome strand-switch novel adjacency, alignments left-flanking the novel adjacency
+        INTRA_CHR_STRAND_SWITCH_33,// intra-chromosome strand-switch novel adjacency, alignments right-flanking the novel adjacency
+
+        INTRA_CHR_REF_ORDER_SWAP,// intra-chromosome reference-order swap, but NO strand-switch, novel adjacency
+
+        INTER_CHR_STRAND_SWITCH_55,// pair WY in Fig.1 in Section 5.4 of VCF spec ver.4.2
+        INTER_CHR_STRAND_SWITCH_33,// pair XZ in Fig.1 in Section 5.4 of VCF spec ver.4.2
+        INTER_CHR_NO_SS_WITH_LEFT_MATE_FIRST_IN_PARTNER, // the green pair in Fig. 7 in Section 5.4 of VCF spec ver.4.2
+        INTER_CHR_NO_SS_WITH_LEFT_MATE_SECOND_IN_PARTNER; // the red pair in Fig. 7 in Section 5.4 of VCF spec ver.4.2
+    }
+
     /**
      * Technically, a BND-formatted variant should have two VCF records, for mates, hence we also have this field.
      */
@@ -43,10 +56,6 @@ public abstract class BreakEndVariantType extends SvType {
                 (forUpstreamLoc ? "1" : "2");
     }
 
-    @Override
-    public final boolean isBreakEndOnly() {
-        return true;
-    }
 
     @Override
     public String toString() {

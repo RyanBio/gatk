@@ -1,5 +1,6 @@
 package org.broadinstitute.hellbender.tools.spark.sv.discovery;
 
+import com.google.common.annotations.VisibleForTesting;
 import htsjdk.variant.variantcontext.Allele;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.StrandSwitch;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.inference.NovelAdjacencyAndAltHaplotype;
@@ -19,12 +20,7 @@ public abstract class SimpleSVType extends SvType {
         super(id, altAllele, len, typeSpecificExtraAttributes);
     }
 
-    @Override
-    public final boolean isBreakEndOnly() {
-        return false;
-    }
-
-    public enum TYPES {
+    public enum SupportedType {
         INV, DEL, INS, DUP, DUP_INV;
     }
 
@@ -32,7 +28,12 @@ public abstract class SimpleSVType extends SvType {
 
         @Override
         public String toString() {
-            return TYPES.INV.name();
+            return SupportedType.INV.name();
+        }
+
+        @VisibleForTesting
+        public Inversion(final String id, final Allele altAllele, final int len, final Map<String, String> typeSpecificExtraAttributes) {
+            super(id, altAllele, len, typeSpecificExtraAttributes);
         }
 
         public Inversion(final NovelAdjacencyAndAltHaplotype novelAdjacencyAndAltHaplotype,
@@ -58,7 +59,12 @@ public abstract class SimpleSVType extends SvType {
 
         @Override
         public String toString() {
-            return TYPES.DEL.name();
+            return SupportedType.DEL.name();
+        }
+
+        @VisibleForTesting
+        public Deletion(final String id, final Allele altAllele, final int len, final Map<String, String> typeSpecificExtraAttributes) {
+            super(id, altAllele, len, typeSpecificExtraAttributes);
         }
 
         public Deletion(final NovelAdjacencyAndAltHaplotype novelAdjacencyAndAltHaplotype,
@@ -71,7 +77,7 @@ public abstract class SimpleSVType extends SvType {
 
         private static String getIDString(final NovelAdjacencyAndAltHaplotype novelAdjacencyAndAltHaplotype) {
 
-            return  ((novelAdjacencyAndAltHaplotype.hasDuplicationAnnotation()) ? GATKSVVCFConstants.DUP_TAN_CONTRACTION_INTERNAL_ID_START_STRING : TYPES.DEL.name())
+            return  ((novelAdjacencyAndAltHaplotype.hasDuplicationAnnotation()) ? GATKSVVCFConstants.DUP_TAN_CONTRACTION_INTERNAL_ID_START_STRING : SupportedType.DEL.name())
                     + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
                     + novelAdjacencyAndAltHaplotype.getLeftJustifiedLeftRefLoc().getContig() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
                     + novelAdjacencyAndAltHaplotype.getLeftJustifiedLeftRefLoc().getEnd() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
@@ -83,7 +89,12 @@ public abstract class SimpleSVType extends SvType {
 
         @Override
         public String toString() {
-            return TYPES.INS.name();
+            return SupportedType.INS.name();
+        }
+
+        @VisibleForTesting
+        public Insertion(final String id, final Allele altAllele, final int len, final Map<String, String> typeSpecificExtraAttributes) {
+            super(id, altAllele, len, typeSpecificExtraAttributes);
         }
 
         public Insertion(final NovelAdjacencyAndAltHaplotype novelAdjacencyAndAltHaplotype,
@@ -96,7 +107,7 @@ public abstract class SimpleSVType extends SvType {
 
         private static String getIDString(final NovelAdjacencyAndAltHaplotype novelAdjacencyAndAltHaplotype) {
 
-            return TYPES.INS.name() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
+            return SupportedType.INS.name() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
                     + novelAdjacencyAndAltHaplotype.getLeftJustifiedLeftRefLoc().getContig() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
                     + novelAdjacencyAndAltHaplotype.getLeftJustifiedLeftRefLoc().getEnd() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
                     + novelAdjacencyAndAltHaplotype.getLeftJustifiedRightRefLoc().getStart();
@@ -107,7 +118,12 @@ public abstract class SimpleSVType extends SvType {
 
         @Override
         public String toString() {
-            return TYPES.DUP.name();
+            return SupportedType.DUP.name();
+        }
+
+        @VisibleForTesting
+        public DuplicationTandem(final String id, final Allele altAllele, final int len, final Map<String, String> typeSpecificExtraAttributes) {
+            super(id, altAllele, len, typeSpecificExtraAttributes);
         }
 
         public DuplicationTandem(final NovelAdjacencyAndAltHaplotype novelAdjacencyAndAltHaplotype,
@@ -131,7 +147,12 @@ public abstract class SimpleSVType extends SvType {
 
         @Override
         public String toString() {
-            return TYPES.DEL.name();
+            return SupportedType.DEL.name();
+        }
+
+        @VisibleForTesting
+        public ImpreciseDeletion(final String id, final Allele altAllele, final int len, final Map<String, String> typeSpecificExtraAttributes) {
+            super(id, altAllele, len, typeSpecificExtraAttributes);
         }
 
         public ImpreciseDeletion(final EvidenceTargetLink evidenceTargetLink, final int svLength, final ReadMetadata metadata) {
@@ -144,7 +165,7 @@ public abstract class SimpleSVType extends SvType {
 
         private static String getIDString(final EvidenceTargetLink evidenceTargetLink, final ReadMetadata metadata) {
 
-            return TYPES.DEL.name()
+            return SupportedType.DEL.name()
                     + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
                     + GATKSVVCFConstants.IMPRECISE + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
                     + metadata.getContigName(evidenceTargetLink.getPairedStrandedIntervals().getLeft().getInterval().getContig())

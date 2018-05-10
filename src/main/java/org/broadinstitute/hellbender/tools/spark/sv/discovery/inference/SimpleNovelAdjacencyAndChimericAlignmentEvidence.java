@@ -10,6 +10,11 @@ import org.broadinstitute.hellbender.utils.Utils;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Simply a wrapper to link together
+ * {@link NovelAdjacencyAndAltHaplotype} and
+ * evidence {@link SimpleChimera}'s.
+ */
 @DefaultSerializer(SimpleNovelAdjacencyAndChimericAlignmentEvidence.Serializer.class)
 public final class SimpleNovelAdjacencyAndChimericAlignmentEvidence {
     private static final NovelAdjacencyAndAltHaplotype.Serializer narlSerializer = new NovelAdjacencyAndAltHaplotype.Serializer();

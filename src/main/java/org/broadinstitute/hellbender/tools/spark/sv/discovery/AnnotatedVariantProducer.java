@@ -89,7 +89,7 @@ public class AnnotatedVariantProducer implements Serializable {
                                                                                    final String sampleId)
             throws IOException {
 
-        final boolean variantIsBND = inferredType.isBreakEndOnly();
+        final boolean variantIsBND = inferredType instanceof BreakEndVariantType;
         final int applicableStop;
         final SimpleInterval refLoc;
         if ( variantIsBND ) {

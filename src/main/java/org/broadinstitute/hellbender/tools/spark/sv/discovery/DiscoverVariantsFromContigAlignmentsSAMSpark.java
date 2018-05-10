@@ -136,7 +136,7 @@ public final class DiscoverVariantsFromContigAlignmentsSAMSpark extends GATKSpar
                 StructuralVariationDiscoveryPipelineSpark.broadcastCNVCalls(ctx, getHeaderForReads(),
                         discoverStageArgs.cnvCallsFile);
 
-        final String vcfOutputFile = prefixForOutput + "_" + SVUtils.getSampleId(getHeaderForReads()) + "_inv_del_ins.vcf";
+        final String vcfOutputFile = prefixForOutput + (prefixForOutput.endsWith("/") ? "" : "_") + SVUtils.getSampleId(getHeaderForReads()) + "_inv_del_ins.vcf";
 
         final SvDiscoveryInputMetaData svDiscoveryInputMetaData =
                 new SvDiscoveryInputMetaData(ctx, discoverStageArgs, null, vcfOutputFile,

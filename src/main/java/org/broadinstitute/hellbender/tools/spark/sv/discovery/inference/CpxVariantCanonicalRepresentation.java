@@ -310,8 +310,6 @@ final class CpxVariantCanonicalRepresentation {
 
         final AlignmentInterval head = tigWithInsMappings.getHeadAlignment();
         final AlignmentInterval tail = tigWithInsMappings.getTailAlignment();
-        if (head == null || tail == null)
-            throw new GATKException("Head or tail alignment is null from contig:\n" + tigWithInsMappings.toString());
 
         if (segments.isEmpty()) { // case where middle alignments all map to disjoint locations
             final int start = head.endInAssembledContig;
@@ -339,9 +337,9 @@ final class CpxVariantCanonicalRepresentation {
             // it must be one of two cases:
             //   1) the base (and possibly following bases) immediately after (or before if reverse strand) the head alignment's ref span is deleted
             //   2) there are bases on the read immediately after the head alignment uncovered by selected alignments, i.e. unmapped insertion
-            final boolean firstSegmentNeighborsHeadAlignment = basicInfo.forwardStrandRep ? (firstSegment.getStart() - head.referenceSpan.getEnd() == 1)
-                                                                                          : (head.referenceSpan.getStart() - firstSegment.getEnd() == 1);
-            if ( ! firstSegmentNeighborsHeadAlignment )
+            final boolean expectedCase = basicInfo.forwardStrandRep ? (firstSegment.getStart() - head.referenceSpan.getEnd() == 1)
+                                                                    : (head.referenceSpan.getStart() - firstSegment.getEnd() == 1);
+            if ( ! expectedCase )
                 throw new CpxVariantInterpreter.UnhandledCaseSeen("1st segment is not overlapping with head alignment but it is not immediately before/after the head alignment either\n"
                         + tigWithInsMappings.toString() + "\nSegments:\t" + segments.toString());
             start = head.endInAssembledContig;
@@ -356,7 +354,7 @@ final class CpxVariantCanonicalRepresentation {
 
         if ( !lastSegment.overlaps(tail.referenceSpan) ) {
             final boolean expectedCase = basicInfo.forwardStrandRep ? (tail.referenceSpan.getStart() - lastSegment.getEnd() == 1)
-                    : (lastSegment.getStart() - tail.referenceSpan.getEnd() == 1);
+                                                                    : (lastSegment.getStart() - tail.referenceSpan.getEnd() == 1);
             if ( ! expectedCase )
                 throw new CpxVariantInterpreter.UnhandledCaseSeen(tigWithInsMappings.toString());
             end = tail.startInAssembledContig;

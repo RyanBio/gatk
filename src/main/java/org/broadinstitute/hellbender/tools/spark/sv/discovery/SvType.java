@@ -1,9 +1,10 @@
 package org.broadinstitute.hellbender.tools.spark.sv.discovery;
 
 import htsjdk.variant.variantcontext.Allele;
+import org.apache.commons.lang3.EnumUtils;
+import org.broadinstitute.hellbender.tools.spark.sv.utils.GATKSVVCFConstants;
 
-import java.util.Collections;
-import java.util.Map;
+import java.util.*;
 
 
 /**
@@ -37,5 +38,17 @@ public abstract class SvType {
     public final Map<String, String> getTypeSpecificAttributes() {
         return extraAttributes;
     }
-    public abstract boolean isBreakEndOnly();
+
+    // TODO: 5/23/18 any better way to do this?
+    public static Set<String> getKnownTypes() {
+        final SortedSet<String> knownTypes = new TreeSet<>( EnumUtils.getEnumMap(SimpleSVType.SupportedType.class).keySet() );
+
+        knownTypes.add(GATKSVVCFConstants.CPX_SV_SYB_ALT_ALLELE_STR);
+
+        for (final BreakEndVariantType.SupportedType supportedType : BreakEndVariantType.SupportedType.values()) {
+            knownTypes.add(supportedType.name());
+        }
+
+        return Collections.unmodifiableSortedSet(knownTypes);
+    }
 }

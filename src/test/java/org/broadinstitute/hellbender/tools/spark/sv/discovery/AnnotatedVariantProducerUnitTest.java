@@ -34,6 +34,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.broadinstitute.hellbender.tools.spark.sv.discovery.SimpleSVDiscoveryTestDataProvider.*;
+import static org.broadinstitute.hellbender.tools.spark.sv.discovery.SimpleSVType.SupportedType.DEL;
 import static org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AssemblyContigWithFineTunedAlignments.NO_GOOD_MAPPING_TO_NON_CANONICAL_CHROMOSOME;
 import static org.broadinstitute.hellbender.tools.spark.sv.utils.GATKSVVCFConstants.*;
 import static org.mockito.Mockito.when;
@@ -275,7 +276,7 @@ public class AnnotatedVariantProducerUnitTest extends GATKBaseTest {
                 .chr("20").start(200).stop(300)
                 .alleles("N", SimpleSVType.ImpreciseDeletion.createBracketedSymbAlleleString(SYMB_ALT_ALLELE_DEL))
                 .attribute(VCFConstants.END_KEY, 300)
-                .attribute(SVTYPE, SimpleSVType.TYPES.DEL.toString())
+                .attribute(SVTYPE, DEL.toString())
                 .make();
 
         final VariantContext annotatedVC = new VariantContextBuilder()
@@ -283,7 +284,7 @@ public class AnnotatedVariantProducerUnitTest extends GATKBaseTest {
                 .chr("20").start(200).stop(300)
                 .alleles("N", SimpleSVType.ImpreciseDeletion.createBracketedSymbAlleleString(SYMB_ALT_ALLELE_DEL))
                 .attribute(VCFConstants.END_KEY, 300)
-                .attribute(SVTYPE, SimpleSVType.TYPES.DEL.toString())
+                .attribute(SVTYPE, DEL.toString())
                 .attribute(READ_PAIR_SUPPORT, 7)
                 .attribute(SPLIT_READ_SUPPORT, 5)
                 .make();
