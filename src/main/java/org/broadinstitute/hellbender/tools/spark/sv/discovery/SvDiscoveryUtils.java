@@ -14,11 +14,14 @@ import org.broadinstitute.hellbender.tools.spark.sv.utils.SVIntervalTree;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVVCFReader;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
+import org.broadinstitute.hellbender.utils.gcs.BucketUtils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
 
 import javax.annotation.Nonnull;
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -49,6 +52,9 @@ public class SvDiscoveryUtils {
                         null,
                         narlyBreakpoints );
             }
+            if ( parameters.narlsFile != null ) {
+                writeNarls(parameters.narlsFile, narls, null);
+            }
         } else {
             final SVIntervalTree<String> trueBreakpoints =
                     SVVCFReader.readBreakpointsFromTruthVCF(parameters.truthVCF, referenceSequenceDictionary, parameters.truthIntervalPadding);
@@ -64,6 +70,9 @@ public class SvDiscoveryUtils {
                             inputData.intervalAssemblies,
                             trueBreakpoints,
                             narlyBreakpoints );
+                }
+                if ( parameters.narlsFile != null ) {
+                    writeNarls(parameters.narlsFile, narls, trueBreakpoints);
                 }
             }
 
@@ -175,5 +184,18 @@ public class SvDiscoveryUtils {
 
         samRecords.sort(localComparator);
         SVFileUtils.writeSAMFile( outputPath, samRecords.iterator(), cloneHeader, true);
+    }
+
+    public static void writeNarls( final String narlsFile, final List<NovelAdjacencyAndAltHaplotype> narls,
+                                   final SVIntervalTree<String> trueBreakpoints ) {
+        try ( final BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(BucketUtils.createFile(narlsFile))) ) {
+            for ( final NovelAdjacencyAndAltHaplotype narl : narls ) {
+                writer.write(narl.toString());
+                if ( )
+                writer.newLine();
+            }
+        } catch ( final IOException ioe ) {
+            throw new UserException("Unable to write narls file.", ioe);
+        }
     }
 }

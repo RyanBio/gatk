@@ -240,6 +240,9 @@ public class StructuralVariationDiscoveryArgumentCollection implements Serializa
         @Argument(doc = "file for breakpoint intervals output", fullName = "breakpoint-intervals", optional = true)
         public String intervalFile;
 
+        @Argument(doc = "file for narls output", fullName = "narls-file", optional = true)
+        public String narlsFile;
+
         @Advanced
         @Hidden
         @Argument(doc = "output cpx variants in a format that is more human friendly, primarily for debugging purposes",

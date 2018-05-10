@@ -5,9 +5,7 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import htsjdk.samtools.*;
-import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
-import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AlignedAssembly;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVFileUtils;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVInterval;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVIntervalTree;
@@ -36,13 +34,12 @@ public final class AlignedAssemblyOrExcuse {
     private final int assemblyId;
     private final String errorMessage;
     private final FermiLiteAssembly assembly;
+    private final float[] meanASPerContig;
     private final List<List<BwaMemAlignment>> contigAlignments;
     private final int secondsInAssembly;
-    private final float assemblyScore;
     private final int readBases;
 
     public int getSecondsInAssembly() { return secondsInAssembly; }
-    public float getAssemblyScore() { return assemblyScore; }
     public int getReadBases() { return readBases; }
 
     public int getAssemblyId() {
@@ -75,26 +72,27 @@ public final class AlignedAssemblyOrExcuse {
         this.assemblyId = assemblyId;
         this.errorMessage = errorMessage;
         this.assembly = null;
+        this.meanASPerContig = null;
         this.contigAlignments = null;
         this.secondsInAssembly = 0;
-        this.assemblyScore = 0.f;
         this.readBases = 0;
     }
 
     public AlignedAssemblyOrExcuse( final int assemblyId, final FermiLiteAssembly assembly,
-                                    final int secondsInAssembly, final float assemblyScore,
-                                    final int readBases,
+                                    final float[] meanASPerContig, final int secondsInAssembly, final int readBases,
                                     final List<List<BwaMemAlignment>> contigAlignments ) {
-        Utils.validate(assembly.getNContigs()==contigAlignments.size(),
+        Utils.validate(assembly.getNContigs() == contigAlignments.size(),
                 "Number of contigs in assembly doesn't match length of list of alignments.");
+        Utils.validate(assembly.getNContigs() == meanASPerContig.length,
+                "Number of contigs in assembly doesn't match length of mean alignment scores.");
         Utils.validateArg(assembly.getContigs().stream().noneMatch(contig -> contig.getConnections()==null),
                 "Some assembly has contigs that have null connections");
         this.assemblyId = assemblyId;
         this.errorMessage = null;
         this.assembly = assembly;
+        this.meanASPerContig = meanASPerContig;
         this.contigAlignments = contigAlignments;
         this.secondsInAssembly = secondsInAssembly;
-        this.assemblyScore = assemblyScore;
         this.readBases = readBases;
     }
 
@@ -102,10 +100,10 @@ public final class AlignedAssemblyOrExcuse {
         this.assemblyId = input.readInt();
         this.errorMessage = input.readString();
         this.secondsInAssembly = input.readInt();
-        this.assemblyScore = input.readFloat();
         this.readBases = input.readInt();
         if ( errorMessage != null ) {
             this.assembly = null;
+            this.meanASPerContig = null;
             this.contigAlignments = null;
         } else {
             final int nContigs = input.readInt();
@@ -133,6 +131,7 @@ public final class AlignedAssemblyOrExcuse {
                 contigAlignments.add(alignments);
             }
             this.contigAlignments = contigAlignments;
+            meanASPerContig = input.readFloats(nContigs);
         }
     }
 
@@ -221,7 +220,6 @@ public final class AlignedAssemblyOrExcuse {
         output.writeInt(assemblyId);
         output.writeString(errorMessage);
         output.writeInt(secondsInAssembly);
-        output.writeFloat(assemblyScore);
         output.writeInt(readBases);
         if ( errorMessage == null ) {
             final int nContigs = assembly.getNContigs();
@@ -245,6 +243,7 @@ public final class AlignedAssemblyOrExcuse {
                     writeAlignment(alignment, output);
                 }
             }
+            output.writeFloats(meanASPerContig);
         }
     }
 
@@ -299,7 +298,7 @@ public final class AlignedAssemblyOrExcuse {
 
         try ( final OutputStreamWriter writer =
                       new OutputStreamWriter(new BufferedOutputStream(BucketUtils.createFile(intervalFile))) ) {
-            writer.write("asm#\trefTig\tstart\tend\tnTigs\tasmSecs\tN50\tpenalty\treadLen\ttigsLen\tstatus\n");
+            writer.write("asm#     \trefTig\tstart\tend\tnTigs\tasmSecs\tN50\tpenalty\treadLen\ttigsLen\tstatus\n");
             final List<SAMSequenceRecord> contigs = header.getSequenceDictionary().getSequences();
             final int nIntervals = intervals.size();
             for ( int intervalIdx = 0; intervalIdx != nIntervals; ++intervalIdx ) {
@@ -318,7 +317,7 @@ public final class AlignedAssemblyOrExcuse {
                                 "AlignedAssemblyOrExcuse list is incomplete or out of order.");
                 final String disposition;
                 if ( alignedAssemblyOrExcuse.getErrorMessage() != null ) {
-                    disposition = "0\t0\t0\t0\t0\t0\t" + alignedAssemblyOrExcuse.getErrorMessage() + "\n";
+                    disposition = "0\t0\t0\t0\t0\t" + alignedAssemblyOrExcuse.getErrorMessage() + "\n";
                 } else {
                     final int contigBases =
                             alignedAssemblyOrExcuse.getAssembly().getContigs().stream()
@@ -331,11 +330,10 @@ public final class AlignedAssemblyOrExcuse {
                         status = (isCalled == isTrue ? "T" : "F") + status;
                     }
                     disposition =
-                            String.format("%d\t%d\t%d\t%.2f\t%d\t%d\t%s\n",
+                            String.format("%d\t%d\t%d\t%d\t%d\t%s\n",
                                             alignedAssemblyOrExcuse.getAssembly().getNContigs(),
                                             alignedAssemblyOrExcuse.getSecondsInAssembly(),
                                             alignedAssemblyOrExcuse.getAssembly().computeN50(),
-                                            alignedAssemblyOrExcuse.getAssemblyScore(),
                                             alignedAssemblyOrExcuse.getReadBases(),
                                             contigBases,
                                             status);
