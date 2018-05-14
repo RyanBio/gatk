@@ -2,6 +2,8 @@ package org.broadinstitute.hellbender.utils.bwa;
 
 import htsjdk.samtools.*;
 import htsjdk.samtools.util.SequenceUtil;
+import org.broadinstitute.hellbender.tools.spark.sv.evidence.AlignedAssemblyOrExcuse;
+import org.broadinstitute.hellbender.tools.spark.sv.evidence.FermiLiteAssemblyHandler.ContigScore;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVUtils;
 import org.broadinstitute.hellbender.utils.BaseUtils;
 import org.broadinstitute.hellbender.utils.Utils;
@@ -138,6 +140,7 @@ public class BwaMemAlignmentUtils {
                                                        final byte[] readQuals, // this can be null
                                                        final List<BwaMemAlignment> alignments,
                                                        final SAMFileHeader header, final List<String> refNames,
+                                                       final ContigScore contigScore,
                                                        final SAMReadGroupRecord contigAlignmentsReadGroup) {
 
         Utils.nonNull(readName, "provided read name is null for the alignments");
@@ -151,7 +154,11 @@ public class BwaMemAlignmentUtils {
             unmappedRec.setReadName(readName);
             unmappedRec.setReadBases(readSequence);
             if ( readQuals != null ) unmappedRec.setBaseQualities(readQuals);
-            return Collections.singletonList(unmappedRec).stream();
+            if ( contigScore != null ) {
+                unmappedRec.setAttribute(AlignedAssemblyOrExcuse.CONTIG_COVERAGE_TAG, contigScore.getMeanCoverage());
+                unmappedRec.setAttribute(AlignedAssemblyOrExcuse.CONTIG_QUALITY_TAG, contigScore.getMeanAS());
+            }
+            return Stream.of(unmappedRec);
         }
 
         final Map<BwaMemAlignment,String> saTagMap = createSATags(alignments,refNames);
@@ -165,6 +172,10 @@ public class BwaMemAlignmentUtils {
                     if ( saTag != null ) samRecord.setAttribute("SA", saTag);
                     if (contigAlignmentsReadGroup != null)
                         samRecord.setAttribute( SAMTag.RG.name(), contigAlignmentsReadGroup.getId());
+                    if ( !samRecord.isSecondaryOrSupplementary() && contigScore != null ) {
+                        samRecord.setAttribute(AlignedAssemblyOrExcuse.CONTIG_COVERAGE_TAG, contigScore.getMeanCoverage());
+                        samRecord.setAttribute(AlignedAssemblyOrExcuse.CONTIG_QUALITY_TAG, contigScore.getMeanAS());
+                    }
                     return samRecord;
                 });
     }

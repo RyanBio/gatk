@@ -4,6 +4,7 @@ import com.esotericsoftware.kryo.DefaultSerializer;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import org.broadinstitute.hellbender.tools.spark.sv.evidence.FermiLiteAssemblyHandler.ContigScore;
 import scala.Tuple2;
 
 import java.util.ArrayList;
@@ -23,16 +24,23 @@ public final class AlignedContig {
 
     private final String contigName;
     private final byte[] contigSequence;
+    private final ContigScore contigScore;
     private final List<AlignmentInterval> alignmentIntervals;
 
     // throws if alignment interval is null
-    public AlignedContig(final String contigName, final byte[] contigSequence, final List<AlignmentInterval> alignmentIntervals) {
+    public AlignedContig(final String contigName, final byte[] contigSequence, final ContigScore contigScore,
+                         final List<AlignmentInterval> alignmentIntervals) {
         if (alignmentIntervals == null) {
             throw new IllegalArgumentException("AlignedContig being constructed with null alignments: " + contigName);
         }
         this.contigName = contigName;
         this.contigSequence = contigSequence;
+        this.contigScore = contigScore;
         this.alignmentIntervals = alignmentIntervals.stream().sorted(getAlignmentIntervalComparator()).collect(Collectors.toList());
+    }
+
+    public AlignedContig(final String contigName, final byte[] contigSequence, final List<AlignmentInterval> alignmentIntervals) {
+        this(contigName, contigSequence, null, alignmentIntervals);
     }
 
     AlignedContig(final Kryo kryo, final Input input) {
@@ -44,6 +52,8 @@ public final class AlignedContig {
         for (int b = 0; b < nBases; ++b) {
             contigSequence[b] = input.readByte();
         }
+
+        contigScore = kryo.readObjectOrNull(input, ContigScore.class);
 
         final int nAlignments = input.readInt();
         alignmentIntervals = new ArrayList<>(nAlignments);
@@ -84,6 +94,8 @@ public final class AlignedContig {
     public byte[] getContigSequence() {
         return contigSequence;
     }
+
+    public ContigScore getContigScore() { return contigScore; }
 
     public boolean isUnmapped() {
         return alignmentIntervals.isEmpty();
@@ -134,6 +146,8 @@ public final class AlignedContig {
         for (final byte base : contigSequence) {
             output.writeByte(base);
         }
+
+        kryo.writeObjectOrNull(output, contigScore, ContigScore.class);
 
         output.writeInt(alignmentIntervals.size());
         alignmentIntervals.forEach(it -> it.serialize(kryo, output));

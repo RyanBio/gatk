@@ -678,7 +678,9 @@ public class AssemblyContigAlignmentsConfigPicker {
             }
         }
 
-        final AlignedContig updatedTig = new AlignedContig(tig.getContigName(), tig.getContigSequence(), selectedAlignments);
+        final AlignedContig updatedTig =
+                new AlignedContig(tig.getContigName(), tig.getContigSequence(),
+                                    tig.getSourceContig().getContigScore(), selectedAlignments);
         return new AssemblyContigWithFineTunedAlignments(
                 updatedTig,
                 lowUniquenessMappings.stream().map(AlignmentInterval::toPackedString).collect(Collectors.toList()),

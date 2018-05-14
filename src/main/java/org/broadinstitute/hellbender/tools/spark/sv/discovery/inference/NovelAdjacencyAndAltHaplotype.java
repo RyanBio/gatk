@@ -12,6 +12,7 @@ import org.broadinstitute.hellbender.tools.spark.sv.discovery.BreakEndVariantTyp
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.SimpleSVType;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.SvType;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.StrandSwitch;
+import org.broadinstitute.hellbender.tools.spark.sv.evidence.FermiLiteAssemblyHandler.ContigScore;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import scala.Tuple2;
 
@@ -47,10 +48,13 @@ public class NovelAdjacencyAndAltHaplotype {
     private final TypeInferredFromSimpleChimera type;
     private final byte[] altHaplotypeSequence;
 
+    private final ContigScore contigScore;
+
     public NovelAdjacencyAndAltHaplotype(final SimpleChimera simpleChimera, final byte[] contigSequence,
                                          final SAMSequenceDictionary referenceDictionary) {
 
         strandSwitch = simpleChimera.strandSwitch;
+        contigScore = simpleChimera.contigScore;
 
         try {
 
@@ -107,6 +111,7 @@ public class NovelAdjacencyAndAltHaplotype {
                 altHaplotypeSequence[i] = input.readByte();
             }
         }
+        this.contigScore = kryo.readObjectOrNull(input, ContigScore.class);
     }
 
     @Override
@@ -155,6 +160,7 @@ public class NovelAdjacencyAndAltHaplotype {
                 output.writeByte(b);
             }
         }
+        kryo.writeObjectOrNull(output, contigScore, ContigScore.class);
     }
 
     public SimpleInterval getLeftJustifiedLeftRefLoc() {
@@ -301,7 +307,13 @@ public class NovelAdjacencyAndAltHaplotype {
      */
     @Override
     public String toString() {
-        return String.format("%s\t%s\t%s\t%s", leftJustifiedLeftRefLoc.toString(), leftJustifiedRightRefLoc.toString(),
-                strandSwitch.name(), complication.toString());
+        float coverage = 0.f;
+        float score = 0.f;
+        if ( contigScore != null ) {
+            coverage = contigScore.getMeanCoverage();
+            score = contigScore.getMeanAS();
+        }
+        return String.format("%s\t%s\t%s\t%s\t%.1f\t%.1f", leftJustifiedLeftRefLoc.toString(), leftJustifiedRightRefLoc.toString(),
+                strandSwitch.name(), complication.toString(), coverage, score);
     }
 }

@@ -30,6 +30,7 @@ import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.ContigAl
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.inference.ImpreciseVariantDetector;
 import org.broadinstitute.hellbender.tools.spark.sv.evidence.AlignedAssemblyOrExcuse;
 import org.broadinstitute.hellbender.tools.spark.sv.evidence.EvidenceTargetLink;
+import org.broadinstitute.hellbender.tools.spark.sv.evidence.FermiLiteAssemblyHandler.ContigScore;
 import org.broadinstitute.hellbender.tools.spark.sv.evidence.FindBreakpointEvidenceSpark;
 import org.broadinstitute.hellbender.tools.spark.sv.evidence.ReadMetadata;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.*;
@@ -292,31 +293,8 @@ public class StructuralVariationDiscoveryPipelineSpark extends GATKSparkTool {
                         .filter(AlignedAssemblyOrExcuse::isNotFailure)
                         .flatMap(aa -> aa.toSAMStreamForAlignmentsOfThisAssembly(headerForReads, refNames, contigAlignmentsReadGroup))
                         .map(SAMRecordToGATKReadAdapter::new)
-<<<<<<< HEAD
                         .collect(Collectors.toList())
         );
-=======
-                        .collect(Collectors.toList());
-        JavaRDD<GATKRead> reads = ctx.parallelize(readsList);
-
-        final String sampleId = svDiscoveryInputData.sampleId;
-        final Broadcast<ReferenceMultiSource> referenceBroadcast = svDiscoveryInputData.referenceBroadcast;
-        final Broadcast<SVIntervalTree<VariantContext>> cnvCallsBroadcast = svDiscoveryInputData.cnvCallsBroadcast;
-
-        final SvDiscoveryInputData updatedSvDiscoveryInputData =
-                new SvDiscoveryInputData(sampleId, svDiscoveryInputData.discoverStageArgs,
-                        svDiscoveryInputData.outputPath + "experimentalInterpretation_",
-                        svDiscoveryInputData.metadata, svDiscoveryInputData.assembledIntervals,
-                        svDiscoveryInputData.intervalAssemblies,
-                        svDiscoveryInputData.evidenceTargetLinks, reads, svDiscoveryInputData.toolLogger,
-                        referenceBroadcast, referenceSequenceDictionaryBroadcast, headerBroadcast, cnvCallsBroadcast);
-
-        EnumMap<AssemblyContigAlignmentSignatureClassifier.RawTypes, JavaRDD<AssemblyContigWithFineTunedAlignments>>
-                contigsByPossibleRawTypes =
-                SvDiscoverFromLocalAssemblyContigAlignmentsSpark.preprocess(updatedSvDiscoveryInputData, nonCanonicalChromosomeNamesFile,true);
-
-        SvDiscoverFromLocalAssemblyContigAlignmentsSpark.dispatchJobs(contigsByPossibleRawTypes, updatedSvDiscoveryInputData);
->>>>>>> add a score for local assemblies
     }
 
     /**
@@ -376,9 +354,11 @@ public class StructuralVariationDiscoveryPipelineSpark extends GATKSparkTool {
                                         .mapToObj(contigIdx ->
                                                 BwaMemAlignmentUtils.toSAMStreamForRead(
                                                         AlignedAssemblyOrExcuse.formatContigName(assemblyId, contigIdx),
-                                                        assembly.getContig(contigIdx).getSequence(), null,
+                                                        assembly.getContig(contigIdx).getSequence(),
+                                                        null,
                                                         allAlignmentsOfThisAssembly.get(contigIdx),
                                                         cleanHeader, refNames,
+                                                        alignedAssemblyNoExcuse.getContigScore(contigIdx),
                                                         new SAMReadGroupRecord(SVUtils.GATKSV_CONTIG_ALIGNMENTS_READ_GROUP_ID)
                                                 )
                                         ).iterator();
@@ -431,10 +411,12 @@ public class StructuralVariationDiscoveryPipelineSpark extends GATKSparkTool {
             return IntStream.range(0, assembly.getNContigs())
                     .mapToObj( contigIdx -> {
                         final byte[] contigSequence = assembly.getContig(contigIdx).getSequence();
-                        final String contigName = AlignedAssemblyOrExcuse.formatContigName(alignedAssembly.getAssemblyId(), contigIdx);
-                        final List<AlignmentInterval> alignmentsForOneContig
-                                = getAlignmentsForOneContig(contigName, contigSequence, allAlignments.get(contigIdx), refNames, header);
-                        return new AlignedContig(contigName, contigSequence, alignmentsForOneContig);
+                        final ContigScore contigScore = alignedAssembly.getContigScore(contigIdx);
+                        final String contigName =
+                                AlignedAssemblyOrExcuse.formatContigName(alignedAssembly.getAssemblyId(), contigIdx);
+                        final List<AlignmentInterval> alignmentsForOneContig =
+                                getAlignmentsForOneContig(contigName, contigSequence, allAlignments.get(contigIdx), refNames, header);
+                        return new AlignedContig(contigName, contigSequence, contigScore, alignmentsForOneContig);
                     } ).collect(Collectors.toList());
         }
 

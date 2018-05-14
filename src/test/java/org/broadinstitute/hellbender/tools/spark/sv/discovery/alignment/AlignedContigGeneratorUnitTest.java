@@ -11,6 +11,7 @@ import org.broadinstitute.hellbender.tools.spark.sv.discovery.SVDiscoveryTestUti
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.SimpleSVDiscoveryTestDataProvider;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.SvDiscoverFromLocalAssemblyContigAlignmentsSpark;
 import org.broadinstitute.hellbender.tools.spark.sv.evidence.AlignedAssemblyOrExcuse;
+import org.broadinstitute.hellbender.tools.spark.sv.evidence.FermiLiteAssemblyHandler.ContigScore;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.bwa.BwaMemAlignment;
@@ -142,7 +143,10 @@ public class AlignedContigGeneratorUnitTest extends GATKBaseTest {
 
         final List<List<BwaMemAlignment>> allAlignments = Arrays.asList(Collections.singletonList(unmappedContigAlignment), Arrays.asList(firstAmbiguousMapping, secondAmbiguousMapping), Collections.singletonList(cleanAlignment), Collections.singletonList(gappedAlignment));
         final FermiLiteAssembly assembly = new FermiLiteAssembly(Arrays.asList(unmappedContig, contigWithAmbiguousMapping, cleanContig, contigWithGapInAlignment));
-        final AlignedAssemblyOrExcuse alignedAssembly = new AlignedAssemblyOrExcuse(1, assembly, new float[assembly.getNContigs()], 0, 0, allAlignments);
+        final ContigScore contigScore = new ContigScore();
+        final ContigScore[] scores = new ContigScore[assembly.getNContigs()];
+        for ( int idx = 0; idx != scores.length; ++idx ) scores[idx] = contigScore;
+        final AlignedAssemblyOrExcuse alignedAssembly = new AlignedAssemblyOrExcuse(1, assembly, scores, 0, 0, allAlignments);
 
         // test contig extraction without unmapped and unambiguous filtering
         final Iterable<AlignedContig> alignedContigsIncludingUnmapped = StructuralVariationDiscoveryPipelineSpark.InMemoryAlignmentParser.getAlignedContigsInOneAssembly(alignedAssembly, refNames, null);

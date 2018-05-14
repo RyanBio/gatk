@@ -1,5 +1,9 @@
 package org.broadinstitute.hellbender.tools.spark.sv.evidence;
 
+import com.esotericsoftware.kryo.DefaultSerializer;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import com.google.common.annotations.VisibleForTesting;
 import htsjdk.samtools.*;
 import htsjdk.samtools.util.SequenceUtil;
@@ -90,7 +94,7 @@ public final class FermiLiteAssemblyHandler implements FindBreakpointEvidenceSpa
         // patch up the assembly to improve contiguity
         final FermiLiteAssembly assembly = reviseAssembly(initialAssembly, removeShadowedContigs, expandAssemblyGraph);
 
-        final float[] meanAlignmentScores = scoreAssembly(readsList, assembly, assemblyName, fastqDir);
+        final ContigScore[] contigScores = scoreAssembly(readsList, assembly, assemblyName, fastqDir);
 
         final int readBases = readsList.stream().mapToInt(read -> read.getBases().length).sum();
 
@@ -113,7 +117,7 @@ public final class FermiLiteAssemblyHandler implements FindBreakpointEvidenceSpa
                             .map(Contig::getSequence)
                             .collect(SVUtils.arrayListCollector(assembly.getNContigs()));
             final List<List<BwaMemAlignment>> alignments = aligner.alignSeqs(sequences);
-            return new AlignedAssemblyOrExcuse(intervalID, assembly, meanAlignmentScores,
+            return new AlignedAssemblyOrExcuse(intervalID, assembly, contigScores,
                                                     secondsInAssembly, readBases, alignments);
         }
     }
@@ -615,7 +619,47 @@ public final class FermiLiteAssemblyHandler implements FindBreakpointEvidenceSpa
         }
     }
 
-    private static float[] scoreAssembly(final List<FastqRead> readsList,
+    @DefaultSerializer(ContigScore.Serializer.class)
+    public static class ContigScore {
+        private final float meanAS;
+        private final float meanCoverage;
+
+        public ContigScore() {
+            this(0.f, 0.f);
+        }
+
+        public ContigScore( final float meanAS, final float meanCoverage ) {
+            this.meanAS = meanAS;
+            this.meanCoverage = meanCoverage;
+        }
+
+        public ContigScore( final Kryo kryo, final Input input ) {
+            meanAS = input.readFloat();
+            meanCoverage = input.readFloat();
+        }
+
+        public float getMeanAS() { return meanAS; }
+        public float getMeanCoverage() { return meanCoverage; }
+
+        public void serialize( final Kryo kryo, final Output output ) {
+            output.writeFloat(meanAS);
+            output.writeFloat(meanCoverage);
+        }
+
+        public static final class Serializer extends com.esotericsoftware.kryo.Serializer<ContigScore> {
+            @Override
+            public void write(final Kryo kryo, final Output output, final ContigScore contigScore ) {
+                contigScore.serialize(kryo, output);
+            }
+
+            @Override
+            public ContigScore read(final Kryo kryo, final Input input, final Class<ContigScore> klass ) {
+                return new ContigScore(kryo, input);
+            }
+        }
+    }
+
+    private static ContigScore[] scoreAssembly(final List<FastqRead> readsList,
                                        final FermiLiteAssembly assembly,
                                        final String assemblyName,
                                        final String fastqDir) {
@@ -684,26 +728,39 @@ public final class FermiLiteAssemblyHandler implements FindBreakpointEvidenceSpa
                 continue;
             }
             BwaMemAlignmentUtils.toSAMStreamForRead(read.getName(), read.getBases(), read.getQuals(), readAlignments,
-                    header, refNames, null).forEach(samReads::add);
+                    header, refNames, null, null).forEach(samReads::add);
         }
         samReads.sort(new SAMRecordCoordinateComparator());
         final String bamFile = String.format("%s/%s.bam", fastqDir, assemblyName);
         SVFileUtils.writeSAMFile(bamFile, samReads.iterator(), header, true);
 
-        final float[] meanAlignmentScores = new float[nContigs];
+        final int[] sumAS = new int[nContigs];
+        final int[] nBases = new int[nContigs];
         final int[] nScores = new int[nContigs];
-        for ( final List<BwaMemAlignment> readAlignments : alignments ) {
+        for ( int readIdx = 0; readIdx != readsList.size(); ++readIdx ) {
+            final List<BwaMemAlignment> readAlignments = alignments.get(readIdx);
             if ( !readAlignments.isEmpty() ) {
                 BwaMemAlignment primaryLine = readAlignments.get(0);
                 final int contigId = primaryLine.getRefId();
-                meanAlignmentScores[contigId] += primaryLine.getAlignerScore();
-                nScores[contigId] += 1;
+                if ( contigId >= 0 ) {
+                    sumAS[contigId] += primaryLine.getAlignerScore();
+                    nBases[contigId] += readsList.get(readIdx).getBases().length;
+                    nScores[contigId] += 1;
+                }
             }
         }
-        for ( int idx = 0; idx != nContigs; ++idx ) {
-            meanAlignmentScores[idx] /= nScores[idx];
+        final ContigScore[] contigScores = new ContigScore[nContigs];
+        for ( int contigIdx = 0; contigIdx != nContigs; ++contigIdx ) {
+            final int scoreCount = nScores[contigIdx];
+            if ( scoreCount > 0 ) {
+                contigScores[contigIdx] =
+                        new ContigScore((float)sumAS[contigIdx]/scoreCount,
+                                        (float)nBases[contigIdx]/contigs.get(contigIdx).getSequence().length);
+            } else {
+                contigScores[contigIdx] = new ContigScore(0.f, 0.f);
+            }
         }
-        return meanAlignmentScores;
+        return contigScores;
     }
 
     private static int assemblyScore(final SAMRecord read) {

@@ -13,9 +13,11 @@ import org.broadinstitute.hellbender.GATKBaseTest;
 import org.broadinstitute.hellbender.engine.datasources.ReferenceMultiSource;
 import org.broadinstitute.hellbender.engine.spark.SparkContextFactory;
 import org.broadinstitute.hellbender.tools.spark.sv.StructuralVariationDiscoveryArgumentCollection;
+import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AlignedContig;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.inference.NovelAdjacencyAndAltHaplotype;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.inference.SimpleChimera;
 import org.broadinstitute.hellbender.tools.spark.sv.evidence.EvidenceTargetLink;
+import org.broadinstitute.hellbender.tools.spark.sv.evidence.FermiLiteAssemblyHandler;
 import org.broadinstitute.hellbender.tools.spark.sv.evidence.ReadMetadata;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.PairedStrandedIntervalTree;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVInterval;
@@ -63,10 +65,13 @@ public class AnnotatedVariantProducerUnitTest extends GATKBaseTest {
     public void testEvidenceAnnotation(final TestDataForSimpleSVs testData,
                                        final String[] expectedMappingQualitiesAsStrings,
                                        final String[] expectedAlignmentLengthsAsStrings) {
+        final AlignedContig fakeAlignedContig =
+                new AlignedContig("asm000001:tig00001", "ACGTACGT".getBytes(),
+                        new FermiLiteAssemblyHandler.ContigScore(), new ArrayList<>());
 
         final List<SimpleChimera> chimericAlignments =
                 Collections.singletonList( new SimpleChimera(testData.firstAlignment, testData.secondAlignment,
-                        Collections.emptyList(), testData.evidenceAssemblyContigName, NO_GOOD_MAPPING_TO_NON_CANONICAL_CHROMOSOME,
+                        Collections.emptyList(), fakeAlignedContig, NO_GOOD_MAPPING_TO_NON_CANONICAL_CHROMOSOME,
                         SVDiscoveryTestUtilsAndCommonDataProvider.b37_seqDict_20_21));
         final Map<String, Object> attributeMap =
                 AnnotatedVariantProducer.getEvidenceRelatedAnnotations(chimericAlignments);
@@ -136,10 +141,13 @@ public class AnnotatedVariantProducerUnitTest extends GATKBaseTest {
                                 final Broadcast<ReferenceMultiSource> referenceBroadcast,
                                 final Broadcast<SAMSequenceDictionary> refSeqDictBroadcast) throws IOException {
 
+        final AlignedContig fakeAlignedContig =
+                new AlignedContig("asm000001:tig00001", "ACGTACGT".getBytes(),
+                        new FermiLiteAssemblyHandler.ContigScore(), new ArrayList<>());
         final NovelAdjacencyAndAltHaplotype breakpoints = testData.biPathBubble;
         final List<SimpleChimera> evidence =
                 Collections.singletonList(new SimpleChimera(testData.firstAlignment, testData.secondAlignment,
-                        Collections.emptyList(), testData.evidenceAssemblyContigName, NO_GOOD_MAPPING_TO_NON_CANONICAL_CHROMOSOME,
+                        Collections.emptyList(), fakeAlignedContig, NO_GOOD_MAPPING_TO_NON_CANONICAL_CHROMOSOME,
                                 SVDiscoveryTestUtilsAndCommonDataProvider.b37_seqDict_20_21));
         final String sampleID = "testSample";
 

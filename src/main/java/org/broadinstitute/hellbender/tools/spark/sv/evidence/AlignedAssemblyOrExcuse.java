@@ -6,6 +6,7 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import htsjdk.samtools.*;
 import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.tools.spark.sv.evidence.FermiLiteAssemblyHandler.ContigScore;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVFileUtils;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVInterval;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVIntervalTree;
@@ -31,10 +32,12 @@ import java.util.stream.Stream;
  */
 @DefaultSerializer(AlignedAssemblyOrExcuse.Serializer.class)
 public final class AlignedAssemblyOrExcuse {
+    public static final String CONTIG_COVERAGE_TAG = "XC";
+    public static final String CONTIG_QUALITY_TAG = "XQ";
     private final int assemblyId;
     private final String errorMessage;
     private final FermiLiteAssembly assembly;
-    private final float[] meanASPerContig;
+    private final ContigScore[] contigScores;
     private final List<List<BwaMemAlignment>> contigAlignments;
     private final int secondsInAssembly;
     private final int readBases;
@@ -61,6 +64,8 @@ public final class AlignedAssemblyOrExcuse {
         return assembly;
     }
 
+    public ContigScore getContigScore( final int contigId ) { return contigScores[contigId]; }
+
     /**
      * List is equal in length to the number of contigs in the assembly.
      */
@@ -72,25 +77,26 @@ public final class AlignedAssemblyOrExcuse {
         this.assemblyId = assemblyId;
         this.errorMessage = errorMessage;
         this.assembly = null;
-        this.meanASPerContig = null;
+        this.contigScores = null;
         this.contigAlignments = null;
         this.secondsInAssembly = 0;
         this.readBases = 0;
     }
 
-    public AlignedAssemblyOrExcuse( final int assemblyId, final FermiLiteAssembly assembly,
-                                    final float[] meanASPerContig, final int secondsInAssembly, final int readBases,
-                                    final List<List<BwaMemAlignment>> contigAlignments ) {
+    public AlignedAssemblyOrExcuse(final int assemblyId, final FermiLiteAssembly assembly,
+                                   final FermiLiteAssemblyHandler.ContigScore[] contigScores,
+                                   final int secondsInAssembly, final int readBases,
+                                   final List<List<BwaMemAlignment>> contigAlignments ) {
         Utils.validate(assembly.getNContigs() == contigAlignments.size(),
                 "Number of contigs in assembly doesn't match length of list of alignments.");
-        Utils.validate(assembly.getNContigs() == meanASPerContig.length,
+        Utils.validate(assembly.getNContigs() == contigScores.length,
                 "Number of contigs in assembly doesn't match length of mean alignment scores.");
         Utils.validateArg(assembly.getContigs().stream().noneMatch(contig -> contig.getConnections()==null),
                 "Some assembly has contigs that have null connections");
         this.assemblyId = assemblyId;
         this.errorMessage = null;
         this.assembly = assembly;
-        this.meanASPerContig = meanASPerContig;
+        this.contigScores = contigScores;
         this.contigAlignments = contigAlignments;
         this.secondsInAssembly = secondsInAssembly;
         this.readBases = readBases;
@@ -103,7 +109,7 @@ public final class AlignedAssemblyOrExcuse {
         this.readBases = input.readInt();
         if ( errorMessage != null ) {
             this.assembly = null;
-            this.meanASPerContig = null;
+            this.contigScores = null;
             this.contigAlignments = null;
         } else {
             final int nContigs = input.readInt();
@@ -131,7 +137,11 @@ public final class AlignedAssemblyOrExcuse {
                 contigAlignments.add(alignments);
             }
             this.contigAlignments = contigAlignments;
-            meanASPerContig = input.readFloats(nContigs);
+            this.contigScores = new ContigScore[nContigs];
+            final ContigScore.Serializer contigScoreSerializer = new ContigScore.Serializer();
+            for ( int idx = 0; idx != nContigs; ++idx ) {
+                contigScores[idx] = contigScoreSerializer.read(kryo, input, ContigScore.class);
+            }
         }
     }
 
@@ -243,7 +253,10 @@ public final class AlignedAssemblyOrExcuse {
                     writeAlignment(alignment, output);
                 }
             }
-            output.writeFloats(meanASPerContig);
+            final ContigScore.Serializer contigScoreSerializer = new ContigScore.Serializer();
+            for ( int idx = 0; idx != nContigs; ++idx ) {
+                contigScoreSerializer.write(kryo, output, contigScores[idx]);
+            }
         }
     }
 
@@ -267,7 +280,8 @@ public final class AlignedAssemblyOrExcuse {
                 .flatMap(contigIdx ->
                         BwaMemAlignmentUtils.toSAMStreamForRead(formatContigName(assemblyId, contigIdx),
                                 assembly.getContig(contigIdx).getSequence(), null,
-                                contigAlignments.get(contigIdx), header, refNames, contigAlignmentsReadGroup)
+                                contigAlignments.get(contigIdx), header, refNames,
+                                contigScores[contigIdx], contigAlignmentsReadGroup)
                         );
     }
 
@@ -365,7 +379,8 @@ public final class AlignedAssemblyOrExcuse {
         final List<String> refNames = SequenceDictionaryUtils.getContigNamesList(cleanHeader.getSequenceDictionary());
         final Stream<SAMRecord> samRecordStream =
                 alignedAssemblyOrExcuseList.stream().filter(AlignedAssemblyOrExcuse::isNotFailure)
-                        .flatMap(aa -> aa.toSAMStreamForAlignmentsOfThisAssembly(cleanHeader, refNames, contigAlignmentsReadGroup));
+                        .flatMap(aa ->
+                                aa.toSAMStreamForAlignmentsOfThisAssembly(cleanHeader, refNames, contigAlignmentsReadGroup));
         SVFileUtils.writeSAMFile(outputAssembliesFile, samRecordStream.iterator(), cleanHeader,
                 assemblyAlnSortOrder == SAMFileHeader.SortOrder.queryname);
     }

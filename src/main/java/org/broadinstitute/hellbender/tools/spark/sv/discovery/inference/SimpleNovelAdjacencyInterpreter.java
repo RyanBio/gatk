@@ -47,7 +47,7 @@ public final class SimpleNovelAdjacencyInterpreter {
         try {
             final List<NovelAdjacencyAndAltHaplotype> narls = narlAndAltSeqAndEvidenceAndTypes.keys()
                     .map(SimpleNovelAdjacencyAndChimericAlignmentEvidence::getNovelAdjacencyReferenceLocations).collect();
-            evaluateNarls(svDiscoveryInputMetaData, narls);
+            SvDiscoveryUtils.evaluateIntervalsAndNarls(svDiscoveryInputMetaData, narls);
 
             final Broadcast<ReferenceMultiSource> referenceBroadcast = svDiscoveryInputMetaData.getReferenceData().getReferenceBroadcast();
             final Broadcast<SAMSequenceDictionary> referenceSequenceDictionaryBroadcast =
@@ -151,7 +151,7 @@ public final class SimpleNovelAdjacencyInterpreter {
         final AlignmentInterval alignmentTwo = contig.getAlignments().get(1);
 
         return new SimpleChimera(alignmentOne, alignmentTwo, contig.getInsertionMappings(),
-                contig.getContigName(), contig.getSAtagForGoodMappingToNonCanonicalChromosome(), referenceDictionary);
+                contig.getSourceContig(), contig.getSAtagForGoodMappingToNonCanonicalChromosome(), referenceDictionary);
     }
 
     /**
@@ -195,7 +195,6 @@ public final class SimpleNovelAdjacencyInterpreter {
         } else { // BND mate pair
             final BreakEndVariantType firstMate = (BreakEndVariantType) svTypes.get(0);
             final BreakEndVariantType secondMate = (BreakEndVariantType) svTypes.get(1);
-
             final Tuple2<SvType, SvType> bndMates = new Tuple2<>(firstMate, secondMate);
             final List<VariantContext> variantContexts = AnnotatedVariantProducer
                     .produceAnnotatedAndLinkedVcFromNovelAdjacency(

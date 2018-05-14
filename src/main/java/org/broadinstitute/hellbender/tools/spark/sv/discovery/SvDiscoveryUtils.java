@@ -14,6 +14,7 @@ import org.broadinstitute.hellbender.tools.spark.sv.utils.SVIntervalTree;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVVCFReader;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
+import org.broadinstitute.hellbender.utils.fermi.FermiLiteAssembly;
 import org.broadinstitute.hellbender.utils.gcs.BucketUtils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
@@ -34,50 +35,56 @@ public class SvDiscoveryUtils {
 
 
 
-    public static void evaluateIntervalsAndNarls(final SvDiscoveryInputData inputData,
-                                                 final List<NovelAdjacencyAndAltHaplotype> narls,
-                                                 final SAMSequenceDictionary referenceSequenceDictionary,
-                                                 final DiscoverVariantsFromContigsAlignmentsSparkArgumentCollection parameters,
-                                                 final Logger toolLogger) {
+    public static void evaluateIntervalsAndNarls( final SvDiscoveryInputMetaData svDiscoveryInputMetaData,
+                                                  final List<NovelAdjacencyAndAltHaplotype> narls ) {
+        final SAMSequenceDictionary refDict =
+                svDiscoveryInputMetaData.referenceData.referenceSequenceDictionaryBroadcast.getValue();
+        final DiscoverVariantsFromContigsAlignmentsSparkArgumentCollection parameters =
+                svDiscoveryInputMetaData.discoverStageArgs;
         final SVIntervalTree<String> narlyBreakpoints =
-                readBreakpointsFromNarls(narls, referenceSequenceDictionary, parameters.truthIntervalPadding);
+                readBreakpointsFromNarls(narls, refDict, parameters.truthIntervalPadding);
 
+        final List<SVInterval> assembledIntervals = svDiscoveryInputMetaData.sampleSpecificData.assembledIntervals;
+        final List<AlignedAssemblyOrExcuse> intervalAssemblies =
+                svDiscoveryInputMetaData.sampleSpecificData.intervalAssemblies;
+        final SAMFileHeader header = svDiscoveryInputMetaData.sampleSpecificData.headerBroadcast.getValue();
         if ( parameters.truthVCF == null ) {
-            if ( parameters.intervalFile != null && inputData.intervalAssemblies != null ) {
+            if ( parameters.intervalFile != null && intervalAssemblies != null ) {
                 AlignedAssemblyOrExcuse.writeIntervalFile(
                         parameters.intervalFile,
-                        inputData.headerBroadcast.getValue(),
-                        inputData.assembledIntervals,
-                        inputData.intervalAssemblies,
+                        header,
+                        assembledIntervals,
+                        intervalAssemblies,
                         null,
                         narlyBreakpoints );
             }
             if ( parameters.narlsFile != null ) {
-                writeNarls(parameters.narlsFile, narls, null);
+                writeNarls(parameters.narlsFile, narls, null, null);
             }
         } else {
             final SVIntervalTree<String> trueBreakpoints =
-                    SVVCFReader.readBreakpointsFromTruthVCF(parameters.truthVCF, referenceSequenceDictionary, parameters.truthIntervalPadding);
+                    SVVCFReader.readBreakpointsFromTruthVCF(parameters.truthVCF, refDict, parameters.truthIntervalPadding);
 
-            if ( inputData.assembledIntervals != null ) {
-                evaluateIntervalsAgainstTruth(inputData.assembledIntervals, trueBreakpoints, toolLogger);
+            final Logger toolLogger = svDiscoveryInputMetaData.toolLogger;
+            if ( assembledIntervals != null ) {
+                evaluateIntervalsAgainstTruth(assembledIntervals, trueBreakpoints, toolLogger);
 
-                if ( parameters.intervalFile != null && inputData.intervalAssemblies != null ) {
+                if ( parameters.intervalFile != null && intervalAssemblies != null ) {
                     AlignedAssemblyOrExcuse.writeIntervalFile(
                             parameters.intervalFile,
-                            inputData.headerBroadcast.getValue(),
-                            inputData.assembledIntervals,
-                            inputData.intervalAssemblies,
+                            header,
+                            assembledIntervals,
+                            intervalAssemblies,
                             trueBreakpoints,
                             narlyBreakpoints );
                 }
                 if ( parameters.narlsFile != null ) {
-                    writeNarls(parameters.narlsFile, narls, trueBreakpoints);
+                    writeNarls(parameters.narlsFile, narls, trueBreakpoints,
+                                svDiscoveryInputMetaData.referenceData.referenceSequenceDictionaryBroadcast.getValue());
                 }
             }
 
             evaluateNarlsAgainstTruth(narlyBreakpoints, trueBreakpoints, toolLogger);
-
         }
     }
 
@@ -186,16 +193,30 @@ public class SvDiscoveryUtils {
         SVFileUtils.writeSAMFile( outputPath, samRecords.iterator(), cloneHeader, true);
     }
 
-    public static void writeNarls( final String narlsFile, final List<NovelAdjacencyAndAltHaplotype> narls,
-                                   final SVIntervalTree<String> trueBreakpoints ) {
+    public static void writeNarls( final String narlsFile,
+                                   final List<NovelAdjacencyAndAltHaplotype> narls,
+                                   final SVIntervalTree<String> trueBreakpoints,
+                                   final SAMSequenceDictionary dict ) {
         try ( final BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(BucketUtils.createFile(narlsFile))) ) {
             for ( final NovelAdjacencyAndAltHaplotype narl : narls ) {
                 writer.write(narl.toString());
-                if ( )
+                if ( trueBreakpoints != null ) {
+                    if ( trueBreakpoints.hasOverlapper(toSVInterval(narl.getLeftJustifiedLeftRefLoc(), dict)) ||
+                            trueBreakpoints.hasOverlapper((toSVInterval(narl.getLeftJustifiedRightRefLoc(), dict))) ) {
+                        writer.write("\tT");
+                    } else {
+                        writer.write("\tF");
+                    }
+                }
                 writer.newLine();
             }
         } catch ( final IOException ioe ) {
             throw new UserException("Unable to write narls file.", ioe);
         }
+    }
+
+    private static SVInterval toSVInterval( final SimpleInterval simpleInterval, final SAMSequenceDictionary dict ) {
+        return new SVInterval(dict.getSequenceIndex(simpleInterval.getContig()),
+                                simpleInterval.getStart(), simpleInterval.getEnd()+1);
     }
 }
