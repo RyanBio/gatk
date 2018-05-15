@@ -111,7 +111,7 @@ public class NovelAdjacencyAndAltHaplotype {
                 altHaplotypeSequence[i] = input.readByte();
             }
         }
-        this.contigScore = kryo.readObjectOrNull(input, ContigScore.class);
+        this.contigScore = new ContigScore.Serializer().read(kryo, input, ContigScore.class);
     }
 
     @Override
@@ -160,7 +160,7 @@ public class NovelAdjacencyAndAltHaplotype {
                 output.writeByte(b);
             }
         }
-        kryo.writeObjectOrNull(output, contigScore, ContigScore.class);
+        new ContigScore.Serializer().write(kryo, output, contigScore);
     }
 
     public SimpleInterval getLeftJustifiedLeftRefLoc() {

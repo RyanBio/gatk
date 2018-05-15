@@ -127,7 +127,7 @@ public class StructuralVariationDiscoveryPipelineSpark extends GATKSparkTool {
     @Advanced
     @Argument(doc = "flag to signal that user wants to run experimental interpretation tool as well",
             fullName = "exp-interpret", optional = true)
-    private Boolean expInterpret = false;
+    private boolean expInterpret = true;
 
     @Override
     public boolean requiresReads()
@@ -189,7 +189,7 @@ public class StructuralVariationDiscoveryPipelineSpark extends GATKSparkTool {
         SVVCFWriter.writeVCF(annotatedVariants, outputPath + "inv_del_ins.vcf", refSeqDictionary, toolLogger);
 
         // TODO: 1/14/18 this is the next version of precise variant calling
-        if ( expInterpret != null ) {
+        if ( expInterpret ) {
             experimentalInterpretation(ctx, assembledEvidenceResults, svDiscoveryInputMetaData);
         }
     }

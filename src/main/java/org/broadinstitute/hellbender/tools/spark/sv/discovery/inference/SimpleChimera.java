@@ -46,7 +46,7 @@ public class SimpleChimera {
     protected SimpleChimera(final Kryo kryo, final Input input) {
 
         this.sourceContigName = input.readString();
-        this.contigScore = kryo.readObjectOrNull(input, ContigScore.class);
+        this.contigScore = new ContigScore.Serializer().read(kryo, input, ContigScore.class);
 
         this.regionWithLowerCoordOnContig = kryo.readObject(input, AlignmentInterval.class);
         this.regionWithHigherCoordOnContig = kryo.readObject(input, AlignmentInterval.class);
@@ -399,7 +399,7 @@ public class SimpleChimera {
     protected void serialize(final Kryo kryo, final Output output) {
 
         output.writeString(sourceContigName);
-        kryo.writeObjectOrNull(output, contigScore, ContigScore.class);
+        new ContigScore.Serializer().write(kryo, output, contigScore);
 
         kryo.writeObject(output, regionWithLowerCoordOnContig);
         kryo.writeObject(output, regionWithHigherCoordOnContig);

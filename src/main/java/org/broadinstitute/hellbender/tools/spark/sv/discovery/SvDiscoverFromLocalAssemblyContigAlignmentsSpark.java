@@ -27,6 +27,7 @@ import org.broadinstitute.hellbender.tools.spark.sv.discovery.inference.Segmente
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.inference.SimpleNovelAdjacencyInterpreter;
 import org.broadinstitute.hellbender.tools.spark.sv.evidence.AlignedAssemblyOrExcuse;
 import org.broadinstitute.hellbender.tools.spark.sv.evidence.FermiLiteAssemblyHandler;
+import org.broadinstitute.hellbender.tools.spark.sv.evidence.FermiLiteAssemblyHandler.ContigScore;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVFileUtils;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVIntervalTree;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVUtils;
@@ -353,9 +354,8 @@ public final class SvDiscoverFromLocalAssemblyContigAlignmentsSpark extends GATK
             }
             final Float contigCoverage = primaryAlignment.getFloatAttribute(AlignedAssemblyOrExcuse.CONTIG_COVERAGE_TAG);
             final Float contigQuality = primaryAlignment.getFloatAttribute(AlignedAssemblyOrExcuse.CONTIG_QUALITY_TAG);
-            final FermiLiteAssemblyHandler.ContigScore contigScore =
-                    new FermiLiteAssemblyHandler.ContigScore(contigQuality == null ? 0.f : contigQuality,
-                                                             contigCoverage == null ? 0.f : contigCoverage);
+            final ContigScore contigScore = new ContigScore(contigQuality == null ? 0.f : contigQuality,
+                                                            contigCoverage == null ? 0.f : contigCoverage);
             return new AlignedContig(primaryAlignment.getReadName(), contigSequence, contigScore, parsedAlignments);
         }
     }

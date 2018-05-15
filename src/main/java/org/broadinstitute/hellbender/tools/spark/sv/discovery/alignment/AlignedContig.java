@@ -1,5 +1,6 @@
 package org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.esotericsoftware.kryo.DefaultSerializer;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -39,22 +40,17 @@ public final class AlignedContig {
         this.alignmentIntervals = alignmentIntervals.stream().sorted(getAlignmentIntervalComparator()).collect(Collectors.toList());
     }
 
+    @VisibleForTesting
     public AlignedContig(final String contigName, final byte[] contigSequence, final List<AlignmentInterval> alignmentIntervals) {
-        this(contigName, contigSequence, null, alignmentIntervals);
+        this(contigName, contigSequence, new ContigScore(), alignmentIntervals);
     }
 
     AlignedContig(final Kryo kryo, final Input input) {
 
         contigName = input.readString();
-
         final int nBases = input.readInt();
-        contigSequence = new byte[nBases];
-        for (int b = 0; b < nBases; ++b) {
-            contigSequence[b] = input.readByte();
-        }
-
-        contigScore = kryo.readObjectOrNull(input, ContigScore.class);
-
+        contigSequence = input.readBytes(nBases);
+        contigScore = new ContigScore.Serializer().read(kryo, input, ContigScore.class);
         final int nAlignments = input.readInt();
         alignmentIntervals = new ArrayList<>(nAlignments);
         for (int i = 0; i < nAlignments; ++i) {
@@ -139,19 +135,12 @@ public final class AlignedContig {
     }
 
     void serialize(final Kryo kryo, final Output output) {
-
         output.writeString(contigName);
-
         output.writeInt(contigSequence.length);
-        for (final byte base : contigSequence) {
-            output.writeByte(base);
-        }
-
-        kryo.writeObjectOrNull(output, contigScore, ContigScore.class);
-
+        output.writeBytes(contigSequence);
+        new ContigScore.Serializer().write(kryo, output, contigScore);
         output.writeInt(alignmentIntervals.size());
         alignmentIntervals.forEach(it -> it.serialize(kryo, output));
-
     }
 
     public static final class Serializer extends com.esotericsoftware.kryo.Serializer<AlignedContig> {
