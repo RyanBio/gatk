@@ -18,6 +18,7 @@ import org.broadinstitute.hellbender.utils.fermi.FermiLiteAssembly;
 import org.broadinstitute.hellbender.utils.fermi.FermiLiteAssembly.Contig;
 import org.broadinstitute.hellbender.utils.fermi.FermiLiteAssembly.Connection;
 import org.broadinstitute.hellbender.utils.gcs.BucketUtils;
+import org.broadinstitute.hellbender.utils.read.CigarUtils;
 import scala.Tuple2;
 
 import java.io.*;
@@ -737,14 +738,13 @@ public final class FermiLiteAssemblyHandler implements FindBreakpointEvidenceSpa
         final int[] sumAS = new int[nContigs];
         final int[] nBases = new int[nContigs];
         final int[] nScores = new int[nContigs];
-        for ( int readIdx = 0; readIdx != readsList.size(); ++readIdx ) {
-            final List<BwaMemAlignment> readAlignments = alignments.get(readIdx);
+        for ( final List<BwaMemAlignment> readAlignments : alignments ) {
             if ( !readAlignments.isEmpty() ) {
                 BwaMemAlignment primaryLine = readAlignments.get(0);
                 final int contigId = primaryLine.getRefId();
                 if ( contigId >= 0 ) {
                     sumAS[contigId] += primaryLine.getAlignerScore();
-                    nBases[contigId] += readsList.get(readIdx).getBases().length;
+                    nBases[contigId] += CigarUtils.countAlignedBases(TextCigarCodec.decode(primaryLine.getCigar()));
                     nScores[contigId] += 1;
                 }
             }
@@ -761,10 +761,5 @@ public final class FermiLiteAssemblyHandler implements FindBreakpointEvidenceSpa
             }
         }
         return contigScores;
-    }
-
-    private static int assemblyScore(final SAMRecord read) {
-        final Integer score = read.getIntegerAttribute("AS");
-        return score == null ? 0 : score;
     }
 }
