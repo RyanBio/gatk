@@ -72,13 +72,13 @@ releases of the toolkit.
 * Pre-packaged Docker images with all needed dependencies installed can be found on
   [our dockerhub repository](https://hub.docker.com/r/broadinstitute/gatk/). This requires a recent version of the
    docker client, which can be found on the [docker website](https://www.docker.com/get-docker).
-* Python Dependencies<a name="python"></a>
-    * GATK uses the [Conda](https://conda.io/docs/index.html) package manager to establish and manage the
-      environment and dependencies required by GATK tools that use Python There are two different conda environments
+* Python Dependencies:<a name="python"></a>
+    * GATK4 uses the [Conda](https://conda.io/docs/index.html) package manager to establish and manage the
+      environment and dependencies required by GATK tools that use Python. There are two different conda environments
       that can be used:
-        * The "gatk" environment, which has no special hardware requirements.
+        * The "gatk" environment, which has no special hardware requirements. The GATK Docker image comes with the
+          "gatk" environment pre-configured.
         * The "gatk-intel" environment, which requires and uses Intel hardware acceleration to increase performance.
-        * The GATK Docker image comes with the "gatk" environment pre-configured.
     * In order to establish the conda environment required to run these tools when not using the Docker image, do
       the following:
         * Make sure [Miniconda or Conda](https://conda.io/docs/index.html) is installed (Miniconda is sufficient).
