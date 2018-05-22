@@ -235,10 +235,10 @@ public final class CompareDuplicatesSpark extends GATKSparkTool {
             v1.clearAttributes();
             return v1;
         }).filter(v1 -> {
-            if (ReadUtils.isNonPrimary(v1) && v1.isDuplicate()) {
-                throw new GATKException("found a non-primary read marked as a duplicate in the bam: "
-                        + fileName);
-            }
+//            if (ReadUtils.isNonPrimary(v1) && v1.isDuplicate()) {
+//                throw new GATKException("found a non-primary read marked as a duplicate in the bam: "
+//                        + fileName);
+//            }
             return !ReadUtils.isNonPrimary(v1);
         });
     }
