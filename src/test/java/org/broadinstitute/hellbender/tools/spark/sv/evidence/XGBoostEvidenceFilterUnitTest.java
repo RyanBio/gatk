@@ -30,8 +30,8 @@ public class XGBoostEvidenceFilterUnitTest extends GATKBaseTest {
     private static final String localClassifierModelFile
             = new File(publicMainResourcesDir, classifierModelFile).getAbsolutePath();
     private static final String testFeaturesJsonFile = publicTestDir + "sv_features_test_data.json";
-    private static final double probabilityTol = 2.0e-4;
-    private static final double featuresTol = 1.0e-6;
+    private static final double probabilityTol = 2.0e-3;
+    private static final double featuresTol = 1.0e-5;
 
     private final ClassifierAccuracyData classifierAccuracyData = new ClassifierAccuracyData(testAccuracyDataJsonFile);
     private final double[] predictYProbaSerial = predictProba(
