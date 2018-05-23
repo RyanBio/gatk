@@ -211,7 +211,7 @@ public class StructuralVariationDiscoveryArgumentCollection implements Serializa
                 fullName = "sv-evidence-filter-model-file")
         public String svEvidenceFilterModelFile = "gatk-resources::/large/sv_evidence_classifier.bin";
 
-        @Argument(doc = "Path to single read 100-mer mappability file", fullName = "sv-genome-umap_s100-file")
+        @Argument(doc = "Path to single read 100-mer mappability file", fullName = "sv-genome-umap-s100-file")
         public String svGenomeUmapS100File = null;
 
         @Argument(doc = "Path to file enumerating gaps in the reference genome", fullName = "sv-genome-gaps-file")

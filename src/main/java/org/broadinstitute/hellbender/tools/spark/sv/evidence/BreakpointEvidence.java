@@ -19,6 +19,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.broadinstitute.hellbender.utils.Utils.validateArg;
+
 /**
  * Various types of read anomalies that provide evidence of genomic breakpoints.
  * There is a shallow hierarchy based on this class that classifies the anomaly as, for example, a split read,
@@ -104,7 +106,7 @@ public class BreakpointEvidence {
 
     /**
      * Returns BreakpointEvidence constructed from string representation. Used to reconstruct BreakpointEvidence for
-     * unit tests. It is intende for stringRep() to be an inverse of this function, but not the other way around. i.e.
+     * unit tests. It is intended for stringRep() to be an inverse of this function, but not the other way around. i.e.
      *      fromStringRep(strRep, readMetadata).stringRep(readMetadata, minEvidenceMapQ) == strRep
      * but it may be the case that
      *      fromStringRep(evidence.stringRep(readMetadata, minEvidenceMapQ), readMetadata) != evidence
@@ -113,7 +115,7 @@ public class BreakpointEvidence {
     static BreakpointEvidence fromStringRep(final String strRep, final ReadMetadata readMetadata) {
         final String[] words = strRep.split("\t");
 
-        final SVInterval location = locationFromStringRep(words[0]).getInterval();
+        final SVInterval location = locationFromStringRep(words[0]);
 
         final int weight = Integer.parseInt(words[1]);
 
@@ -123,11 +125,9 @@ public class BreakpointEvidence {
             return new TemplateSizeAnomaly(location, weight, readCount);
         } else {
             final List<StrandedInterval> distalTargets = words[3].isEmpty() ? new ArrayList<>()
-                : Arrays.stream(words[3].split(";")).map(BreakpointEvidence::locationFromStringRep)
+                : Arrays.stream(words[3].split(";")).map(BreakpointEvidence::strandedLocationFromStringRep)
                     .collect(Collectors.toList());
-            if(distalTargets.size() > 1) {
-                throw new IllegalArgumentException("BreakpointEvidence must have 0 or 1 distal targets");
-            }
+            validateArg(distalTargets.size() > 1, "BreakpointEvidence must have 0 or 1 distal targets");
             final String[] templateParts = words[4].split("/");
             final String templateName = templateParts[0];
             final TemplateFragmentOrdinal fragmentOrdinal;
@@ -189,12 +189,22 @@ public class BreakpointEvidence {
         }
     }
 
-    private static StrandedInterval locationFromStringRep(final String locationStr) {
+    private static SVInterval locationFromStringRep(final String locationStr) {
         final String[] locationParts = locationStr.split("[\\[\\]:]");
+        validateArg(locationParts.length >= 2, "Could not parse SVInterval from string");
         final int contig = Integer.parseInt(locationParts[0]);
         final int start = Integer.parseInt(locationParts[1]);
         final int end = Integer.parseInt(locationParts[2]);
-        final boolean strand = locationParts.length == 4 && locationParts[3].equals("1");
+        return new SVInterval(contig, start, end);
+    }
+
+    private static StrandedInterval strandedLocationFromStringRep(final String locationStr) {
+        final String[] locationParts = locationStr.split("[\\[\\]:]");
+        validateArg(locationParts.length == 4, "Could not parse StrandedInterval from string");
+        final int contig = Integer.parseInt(locationParts[0]);
+        final int start = Integer.parseInt(locationParts[1]);
+        final int end = Integer.parseInt(locationParts[2]);
+        final boolean strand = locationParts[3].equals("1");
         return new StrandedInterval(new SVInterval(contig, start, end), strand);
     }
 
@@ -505,8 +515,9 @@ public class BreakpointEvidence {
             super(read, metadata, primaryAlignmentClippedAtAlignmentStart ? read.getStart() : read.getEnd(),
                   UNCERTAINTY, !primaryAlignmentClippedAtAlignmentStart, SPLIT_READ_WEIGHT);
             this.primaryAlignmentForwardStrand = !read.isReverseStrand();
-            if ( getCigarString() == null || getCigarString().isEmpty() )
+            if ( getCigarString() == null || getCigarString().isEmpty() ) {
                 throw new GATKException("Read has no cigar string.");
+            }
             this.primaryAlignmentClippedAtStart = primaryAlignmentClippedAtAlignmentStart;
             if (read.hasAttribute(SA_TAG_NAME)) {
                 tagSA = read.getAttributeAsString(SA_TAG_NAME);
@@ -545,17 +556,17 @@ public class BreakpointEvidence {
             } else {
                 for(final StrandedInterval distalTarget : distalTargets) {
                     final String contigName = readMetadata.getContigName(distalTarget.getInterval().getContig());
-                    final boolean strand = distalTarget.getStrand();
+                    final boolean isForwardStrand = distalTarget.getStrand();
                     final int referenceLength = distalTarget.getInterval().getLength();
                     final int pos = distalTarget.getInterval().getEnd() - 1 - UNCERTAINTY;
-                    final int start = strand ? pos - referenceLength: pos;
+                    final int start = isForwardStrand ? pos - referenceLength: pos;
                     final int clipLength = 151 - referenceLength;
                     final String cigar = referenceLength >= 151 ? referenceLength + "M"
-                            : (strand ? referenceLength + "M" + clipLength + "S"
+                            : (isForwardStrand ? referenceLength + "M" + clipLength + "S"
                                         : clipLength + "S" + referenceLength + "M");
                     final int mapq = Integer.MAX_VALUE;
                     final int mismatches = 0;
-                    final SAMapping mapping = new SAMapping(contigName, start, strand, cigar, mapq, mismatches);
+                    final SAMapping mapping = new SAMapping(contigName, start, isForwardStrand, cigar, mapq, mismatches);
                     saMappings.add(mapping);
                 }
                 tagSA = saMappings.stream().map(SAMapping::toTagString).collect(Collectors.joining());

@@ -5,7 +5,6 @@ import biz.k11i.xgboost.learner.ObjFunction;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.Lists;
 import htsjdk.samtools.CigarElement;
 import htsjdk.samtools.CigarOperator;
 import htsjdk.samtools.TextCigarCodec;
@@ -28,29 +27,22 @@ import java.util.*;
  * the specified threshold.
  */
 public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence> {
-    static private final boolean useFastMathExp = true;
-    private static final List<String> defaultEvidenceTypeOrder = Arrays.asList(
+    private static final boolean USE_FAST_MATH_EXP = true;
+    private static final List<String> DEFAULT_EVIDENCE_TYPE_ORDER = Arrays.asList(
             "TemplateSizeAnomaly",
             "MateUnmapped", "InterContigPair",
             "SplitRead", "LargeIndel", "WeirdTemplateSize", "SameStrandPair", "OutiesPair"
     );
 
-    static private final int NUM_OVERLAP = 0;
-    static private final int NUM_COHERENT = 1;
-    static private final int OVERLAP_MAPPING_QUALITY = 2;
-    static private final int COHERENT_MAPPING_QUALITY = 3;
-
     private final PartitionCrossingChecker partitionCrossingChecker;
 
     private final Predictor predictor;
     private final Map<String, Integer> evidenceTypeMap;
-    private final double coverage;
     private final double thresholdProbability;
-    private final Map<String, String> readGroupToLibraryMap;
-    private final Map<String, LibraryStatistics> libraryStatisticsMap;
+    private final ReadMetadata readMetadata;
 
     private final EvidenceOverlapChecker evidenceOverlapChecker;
-    private final Map<BreakpointEvidence, int[]> rawFeatureCache;
+    private final Map<BreakpointEvidence, UnscaledOverlapInfo> rawFeatureCache;
 
     private Iterator<SVIntervalTree.Entry<List<BreakpointEvidence>>> treeItr;
     private Iterator<BreakpointEvidence> listItr;
@@ -63,30 +55,37 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
             final StructuralVariationDiscoveryArgumentCollection.FindBreakpointEvidenceSparkArgumentCollection params,
             final PartitionCrossingChecker partitionCrossingChecker
     ) {
-        this.predictor = loadPredictor(params.svEvidenceFilterModelFile);
-        this.evidenceTypeMap = loadEvidenceTypeMap(params.svCategoricalVariablesFile);
-        this.genomeGaps = new SVIntervalTree<>();
+        if(params.svGenomeGapsFile == null) {
+            throw new IllegalArgumentException("XGBoostEvidenceFilter requires non-null sv-genome-gaps-file");
+        }
+        if(params.svGenomeCentromeresFile == null) {
+            throw new IllegalArgumentException("XGBoostEvidenceFilter requires non-null sv-genome-centromeres-file");
+        }
+        if(params.svGenomeUmapS100File == null) {
+            throw new IllegalArgumentException("XGBoostEvidenceFilter requires non-null sv-genome-umap-s100-file");
+        }
+        predictor = loadPredictor(params.svEvidenceFilterModelFile);
+        evidenceTypeMap = loadEvidenceTypeMap(params.svCategoricalVariablesFile);
+        genomeGaps = new SVIntervalTree<>();
         loadGenomeIntervals(this.genomeGaps, params.svGenomeGapsFile, readMetadata);
         loadGenomeIntervals(this.genomeGaps, params.svGenomeCentromeresFile, readMetadata);
-        this.umapS100Mappability = new SVIntervalTree<>();
+        umapS100Mappability = new SVIntervalTree<>();
         loadGenomeIntervals(this.umapS100Mappability, params.svGenomeUmapS100File, readMetadata);
 
         this.partitionCrossingChecker = partitionCrossingChecker;
-        this.coverage = readMetadata.getCoverage();
-        this.thresholdProbability = params.svEvidenceFilterThresholdProbability;
-        this.readGroupToLibraryMap = readMetadata.getReadGroupToLibraryMap();
-        this.libraryStatisticsMap = readMetadata.getAllLibraryStatistics();
+        thresholdProbability = params.svEvidenceFilterThresholdProbability;
+        this.readMetadata = readMetadata;
 
-        this.evidenceOverlapChecker = new EvidenceOverlapChecker(evidenceItr, readMetadata, params.minEvidenceMapQ);
-        this.rawFeatureCache = new HashMap<>();
+        evidenceOverlapChecker = new EvidenceOverlapChecker(evidenceItr, readMetadata, params.minEvidenceMapQ);
+        rawFeatureCache = new HashMap<>();
 
-        this.listItr = null;
-        this.treeItr = evidenceOverlapChecker.getTreeItr();
+        listItr = null;
+        treeItr = evidenceOverlapChecker.getTreeItr();
     }
 
 
     public static Predictor loadPredictor(final String modelFileLocation) {
-        ObjFunction.useFastMathExp(useFastMathExp);
+        ObjFunction.useFastMathExp(USE_FAST_MATH_EXP);
         try(final InputStream inputStream = getInputStream(modelFileLocation)) {
             return new Predictor(inputStream);
         } catch(Exception e) {
@@ -100,11 +99,9 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
     static InputStream getInputStream(final String fileLocation) throws IOException {
         if(fileLocation.startsWith("gatk-resources::")) {
             final InputStream inputStream = XGBoostEvidenceFilter.class.getResourceAsStream(fileLocation.substring(16));
-            if (AbstractFeatureReader.hasBlockCompressedExtension(fileLocation)) {
-                return IOUtils.makeZippedInputStream(new BufferedInputStream(inputStream));
-            } else {
-                return inputStream;
-            }
+            return AbstractFeatureReader.hasBlockCompressedExtension(fileLocation) ?
+                    IOUtils.makeZippedInputStream(new BufferedInputStream(inputStream))
+                    : inputStream;
         } else {
             return BucketUtils.openFile(fileLocation);
         }
@@ -115,8 +112,8 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
         final HashMap<String, Integer> evidenceTypeMap = new HashMap<>();
         if(categoricalVariablesMapFile == null || categoricalVariablesMapFile.isEmpty()) {
             // no categorical variables file, just use default evidence order
-            for(int index = 0; index < defaultEvidenceTypeOrder.size(); ++index) {
-                evidenceTypeMap.put(defaultEvidenceTypeOrder.get(index), index);
+            for(int index = 0; index < DEFAULT_EVIDENCE_TYPE_ORDER.size(); ++index) {
+                evidenceTypeMap.put(DEFAULT_EVIDENCE_TYPE_ORDER.get(index), index);
             }
             return evidenceTypeMap;
         }
@@ -305,20 +302,15 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
         if(evidence instanceof BreakpointEvidence.ReadEvidence) {
             // For ReadEvidence, return templateSize as percentile of library's cumulative density function:
             final String readGroup = ((BreakpointEvidence.ReadEvidence) evidence).getReadGroup();
-            final String library = readGroupToLibraryMap.get(readGroup);
-            final LibraryStatistics libraryStatistics = libraryStatisticsMap.get(library);
+            final String library = readMetadata.getReadGroupToLibraryMap().get(readGroup);
+            final LibraryStatistics libraryStatistics = readMetadata.getLibraryStatistics(library);
             final IntHistogram.CDF templateSizeCDF = libraryStatistics.getCDF();
-            /*
-            final IntHistogram.CDF templateSizeCDF = libraryStatisticsMap.get(
-                    ((BreakpointEvidence.ReadEvidence) evidence).getReadGroup()
-            ).getCDF();
-            */
             final int cdfBin = Integer.min(Math.abs(((BreakpointEvidence.ReadEvidence) evidence).getTemplateSize()),
                                            templateSizeCDF.size() - 1);
             return templateSizeCDF.getFraction(cdfBin);
         } else if(evidence instanceof BreakpointEvidence.TemplateSizeAnomaly) {
-            // For TemplateSizeAnomaly, return readCount scaled by coverage
-            return (double)(((BreakpointEvidence.TemplateSizeAnomaly) evidence).getReadCount()) / coverage;
+            // For TemplateSizeAnomaly, return readCount scaled by meanGenomeCoverage
+            return (double)(((BreakpointEvidence.TemplateSizeAnomaly) evidence).getReadCount()) / readMetadata.getCoverage();
         } else {
             throw new IllegalArgumentException(
                     "templateSize feature only defined for ReadEvidence and TemplateSizeAnomaly"
@@ -353,26 +345,20 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
                 coherentMappingQuality += mappingQuality;
             }
         }
-        final int[] evidenceFeatureCache = new int[4];
-        evidenceFeatureCache[NUM_OVERLAP] = numOverlap;
-        evidenceFeatureCache[NUM_COHERENT] = numCoherent;
-        evidenceFeatureCache[OVERLAP_MAPPING_QUALITY] = overlapMappingQuality;
-        evidenceFeatureCache[COHERENT_MAPPING_QUALITY] = coherentMappingQuality;
-        rawFeatureCache.put(evidence, evidenceFeatureCache);
+        rawFeatureCache.put(evidence,
+                            new UnscaledOverlapInfo(numOverlap, numCoherent, overlapMappingQuality, coherentMappingQuality));
     }
 
     private CoverageScaledOverlapInfo getIndividualOverlapInfo(final BreakpointEvidence evidence) {
         if(!rawFeatureCache.containsKey(evidence)) {
             cacheOverlapInfo(evidence);
         }
-        final int[] evidenceFeatureCache = rawFeatureCache.get(evidence);
-        final int numOverlap = evidenceFeatureCache[NUM_OVERLAP];
-        final int numCoherent = evidenceFeatureCache[NUM_COHERENT];
-        final int overlapMappingQuality = evidenceFeatureCache[OVERLAP_MAPPING_QUALITY];
-        final int coherentMappingQuality = evidenceFeatureCache[COHERENT_MAPPING_QUALITY];
-        final double meanOverlapMappingQuality = ((double)overlapMappingQuality) / numOverlap;
-        return new CoverageScaledOverlapInfo(numOverlap, numCoherent, overlapMappingQuality, coherentMappingQuality,
-                meanOverlapMappingQuality, coverage);
+        final UnscaledOverlapInfo evidenceFeatureCache = rawFeatureCache.get(evidence);
+        final double meanOverlapMappingQuality = ((double)evidenceFeatureCache.overlapMappingQuality)
+                                               / evidenceFeatureCache.numOverlap;
+        return new CoverageScaledOverlapInfo(evidenceFeatureCache.numOverlap, evidenceFeatureCache.numCoherent,
+                                             evidenceFeatureCache.overlapMappingQuality, evidenceFeatureCache.coherentMappingQuality,
+                                             meanOverlapMappingQuality, readMetadata.getCoverage());
     }
 
     private CoverageScaledOverlapInfo getClusterOverlapInfo(final BreakpointEvidence evidence) {
@@ -389,18 +375,19 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
             if(!rawFeatureCache.containsKey(overlapper)) {
                 cacheOverlapInfo(overlapper);
             }
-            final int[] overlapperFeatureCache = rawFeatureCache.get(overlapper);
-            clusterNumOverlap = Math.max(clusterNumOverlap, overlapperFeatureCache[NUM_OVERLAP]);
-            clusterNumCoherent = Math.max(clusterNumCoherent, overlapperFeatureCache[NUM_COHERENT]);
-            clusterOverlapMappingQuality = Math.max(clusterOverlapMappingQuality, overlapperFeatureCache[OVERLAP_MAPPING_QUALITY]);
-            clusterCoherentMappingQuality = Math.max(clusterCoherentMappingQuality, overlapperFeatureCache[COHERENT_MAPPING_QUALITY]);
+            final UnscaledOverlapInfo overlapperFeatureCache = rawFeatureCache.get(overlapper);
+            clusterNumOverlap = Math.max(clusterNumOverlap, overlapperFeatureCache.numOverlap);
+            clusterNumCoherent = Math.max(clusterNumCoherent, overlapperFeatureCache.numCoherent);
+            clusterOverlapMappingQuality = Math.max(clusterOverlapMappingQuality, overlapperFeatureCache.overlapMappingQuality);
+            clusterCoherentMappingQuality = Math.max(clusterCoherentMappingQuality, overlapperFeatureCache.coherentMappingQuality);
 
-            final double meanOverlapMappingQuality = ((double) overlapperFeatureCache[OVERLAP_MAPPING_QUALITY]) / overlapperFeatureCache[NUM_OVERLAP];
+            final double meanOverlapMappingQuality = ((double) overlapperFeatureCache.overlapMappingQuality)
+                                                    / overlapperFeatureCache.numOverlap;
             clusterMeanOverlapMappingQuality = Math.max(clusterMeanOverlapMappingQuality, meanOverlapMappingQuality);
         }
 
         return new CoverageScaledOverlapInfo(clusterNumOverlap, clusterNumCoherent, clusterOverlapMappingQuality,
-                clusterCoherentMappingQuality, clusterMeanOverlapMappingQuality, coverage);
+                clusterCoherentMappingQuality, clusterMeanOverlapMappingQuality, readMetadata.getCoverage());
     }
 
     private static <T> void addToTree( final SVIntervalTree<List<T>> tree,
@@ -489,7 +476,7 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
             private final Iterator<SVIntervalTree.Entry<List<BreakpointEvidence>>> treeItr;
             private Iterator<BreakpointEvidence> listItr;
             private final boolean checkCoherence;
-            private final Boolean strand;
+            private final Boolean isForwardStrand;
             private final List<StrandedInterval> distalTargets;
 
             OverlapAndCoherenceIterator(final BreakpointEvidence evidence,
@@ -498,10 +485,10 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
                                         final int minEvidenceMapQ) {
                 this.readMetadata = readMetadata;
                 this.minEvidenceMapQ = minEvidenceMapQ;
-                this.treeItr = evidenceTree.overlappers(evidence.getLocation());
-                this.strand = evidence.isEvidenceUpstreamOfBreakpoint();
-                this.checkCoherence = (strand != null) && evidence.hasDistalTargets(readMetadata, minEvidenceMapQ);
-                if(this.checkCoherence) {
+                treeItr = evidenceTree.overlappers(evidence.getLocation());
+                isForwardStrand = evidence.isEvidenceUpstreamOfBreakpoint();
+                checkCoherence = (isForwardStrand != null) && evidence.hasDistalTargets(readMetadata, minEvidenceMapQ);
+                if(checkCoherence) {
                     distalTargets = new ArrayList<>(evidence.getDistalTargets(readMetadata, minEvidenceMapQ));
                 } else {
                     distalTargets = null;
@@ -531,7 +518,7 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
                 Boolean isCoherent = false;
                 if(checkCoherence) {
                     Boolean overlapperStrand = overlapper.isEvidenceUpstreamOfBreakpoint();
-                    if(overlapperStrand == strand && overlapper.hasDistalTargets(readMetadata, minEvidenceMapQ)) {
+                    if(overlapperStrand == isForwardStrand && overlapper.hasDistalTargets(readMetadata, minEvidenceMapQ)) {
                         for(final StrandedInterval distalTarget : distalTargets) {
                             for(final StrandedInterval overlapperDistalTarget : new ArrayList<>(overlapper.getDistalTargets(readMetadata, minEvidenceMapQ))) {
                                 if(distalTarget.getStrand() == overlapperDistalTarget.getStrand()
@@ -547,8 +534,22 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
         }
     }
 
+    private static class UnscaledOverlapInfo {
+        final int numOverlap;
+        final int numCoherent;
+        final int overlapMappingQuality;
+        final int coherentMappingQuality;
+        UnscaledOverlapInfo(final int numOverlap, final int numCoherent, final int overlapMappingQuality,
+                            final int coherentMappingQuality) {
+            this.numOverlap = numOverlap;
+            this.numCoherent = numCoherent;
+            this.overlapMappingQuality = overlapMappingQuality;
+            this.coherentMappingQuality = coherentMappingQuality;
+        }
+    }
+
     /**
-     * Class that takes raw overlap info and automatically scales it to coverage, storing the result for later retrieval
+     * Class that takes raw overlap info and automatically scales it to meanGenomeCoverage, storing the result for later retrieval
      */
     private static class CoverageScaledOverlapInfo {
         final double numOverlap;
