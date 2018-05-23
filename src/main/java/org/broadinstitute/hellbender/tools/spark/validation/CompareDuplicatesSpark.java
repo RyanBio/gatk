@@ -13,6 +13,7 @@ import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.BetaFeature;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.barclay.help.DocumentedFeature;
+import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import picard.cmdline.programgroups.DiagnosticsAndQCProgramGroup;
 import org.broadinstitute.hellbender.engine.TraversalParameters;
 import org.broadinstitute.hellbender.engine.spark.GATKSparkTool;
@@ -25,6 +26,7 @@ import org.broadinstitute.hellbender.utils.read.ReadUtils;
 import org.broadinstitute.hellbender.utils.read.markduplicates.ReadsKey;
 import scala.Tuple2;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -101,6 +103,10 @@ public final class CompareDuplicatesSpark extends GATKSparkTool {
     @Argument(doc="Throw error if any differences were found", fullName = THROW_ON_DIFF_LONG_NAME, optional = true)
     protected boolean throwOnDiff = false;
 
+    @Argument(doc = "If output is given, the tool will return a bam with all the mismatching duplicate groups in the specified file",
+            shortName = StandardArgumentDefinitions.OUTPUT_SHORT_NAME, fullName = StandardArgumentDefinitions.OUTPUT_LONG_NAME, optional = true)
+    protected String output;
+
     @Override
     protected void runTool(final JavaSparkContext ctx) {
 
@@ -159,6 +165,38 @@ public final class CompareDuplicatesSpark extends GATKSparkTool {
 
             return getDupes(iFirstReads, iSecondReads, header);
         });
+
+        if (output!=null) {
+            JavaPairRDD<Integer, Tuple2<Iterable<GATKRead>, Iterable<GATKRead>>> unequalGroups = cogroup.filter(v1 -> {
+                SAMFileHeader header = bHeader.getValue();
+
+                Iterable<GATKRead> iFirstReads = v1._2()._1();
+                Iterable<GATKRead> iSecondReads = v1._2()._2();
+
+                MatchType type = getDupes(iFirstReads, iSecondReads, header);
+
+                return type!=MatchType.EQUAL;
+            });
+
+            Broadcast<Tuple2<String, String>> sourceNames = ctx.broadcast(new Tuple2<>(getReadSourceName(), input2));
+
+            JavaRDD<GATKRead> readsMapped = unequalGroups.flatMap(v1 -> {
+                final List<GATKRead> out = new ArrayList<>();
+
+                Iterable<GATKRead> iFirstReads = v1._2()._1();
+                Iterable<GATKRead> iSecondReads = v1._2()._2();
+
+                iFirstReads.forEach(read -> {read.setAttribute("in","<I1>:"+sourceNames.value()._1); out.add(read);});
+                iSecondReads.forEach(read -> {read.setAttribute("in","<I2>:"+sourceNames.value()._2); out.add(read);});
+
+                return out.iterator();
+            });
+
+            SAMFileHeader headerForwrite = bHeader.getValue();
+            headerForwrite.setAttribute("in","original read file source");
+
+            writeReads(ctx, output, readsMapped, headerForwrite);
+        }
 
         // TODO: We should also produce examples of reads that don't match to make debugging easier (#1263).
         Map<MatchType, Integer> tagCountMap = tagged.mapToPair(v1 ->
@@ -234,12 +272,6 @@ public final class CompareDuplicatesSpark extends GATKSparkTool {
         return initialReads.map((Function<GATKRead, GATKRead>) v1 -> {
             v1.clearAttributes();
             return v1;
-        }).filter(v1 -> {
-//            if (ReadUtils.isNonPrimary(v1) && v1.isDuplicate()) {
-//                throw new GATKException("found a non-primary read marked as a duplicate in the bam: "
-//                        + fileName);
-//            }
-            return !ReadUtils.isNonPrimary(v1);
         });
     }
 
