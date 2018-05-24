@@ -15,13 +15,18 @@ import org.broadinstitute.hellbender.GATKBaseTest;
 import org.broadinstitute.hellbender.engine.spark.SparkContextFactory;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.tools.spark.sv.StructuralVariationDiscoveryArgumentCollection;
+import org.broadinstitute.hellbender.tools.spark.sv.utils.SVInterval;
+import org.broadinstitute.hellbender.tools.spark.sv.utils.StrandedInterval;
 import org.broadinstitute.hellbender.tools.spark.utils.IntHistogram;
+import org.broadinstitute.hellbender.utils.Utils;
 import org.testng.AssertJUnit;
 import org.testng.annotations.Test;
 
 import java.io.*;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static org.broadinstitute.hellbender.utils.Utils.validateArg;
 
 public class XGBoostEvidenceFilterUnitTest extends GATKBaseTest {
     private static final String testAccuracyDataJsonFile = publicTestDir + "sv_classifier_test_data.json";
@@ -47,8 +52,9 @@ public class XGBoostEvidenceFilterUnitTest extends GATKBaseTest {
     private static final String DEFAULT_SAMPLE_NAME = "SampleX";
     public static final ReadMetadata readMetadata = initMetadata();
     private static final PartitionCrossingChecker emptyCrossingChecker = new PartitionCrossingChecker();
+    private static final BreakpointEvidenceFactory breakpointEvidenceFactory = new BreakpointEvidenceFactory(readMetadata);
     private final List<BreakpointEvidence> evidenceList = Arrays.stream(featuresTestData.stringReps)
-            .map(strRep -> BreakpointEvidence.fromStringRep(strRep, readMetadata)).collect(Collectors.toList());
+            .map(breakpointEvidenceFactory::fromStringRep).collect(Collectors.toList());
 
     private static SAMFileHeader initSAMFileHeader() {
         final SAMFileHeader samHeader = createArtificialSamHeader();
@@ -185,7 +191,7 @@ public class XGBoostEvidenceFilterUnitTest extends GATKBaseTest {
             final String stringRep = featuresTestData.stringReps[ind];
             final EvidenceFeatures fVec = featuresTestData.features[ind];
 
-            final BreakpointEvidence convertedEvidence = BreakpointEvidence.fromStringRep(stringRep, readMetadata);
+            final BreakpointEvidence convertedEvidence = breakpointEvidenceFactory.fromStringRep(stringRep);
             final String convertedRep = convertedEvidence.stringRep(readMetadata, params.minEvidenceMapQ);
             AssertJUnit.assertEquals("BreakpointEvidence.fromStringRep does not invert BreakpointEvidence.stringRep",
                     stringRep.trim(), convertedRep.trim());
@@ -296,7 +302,7 @@ public class XGBoostEvidenceFilterUnitTest extends GATKBaseTest {
                 int rowIndex = 0;
                 for(final JsonNode valueNode: columnArrayNode) {
                     final EvidenceFeatures fVec = matrix[rowIndex];
-                    fVec.set_value(columnIndex, valueNode.asDouble());
+                    fVec.setValue(columnIndex, valueNode.asDouble());
                     ++rowIndex;
                 }
                 ++columnIndex;
@@ -383,6 +389,148 @@ public class XGBoostEvidenceFilterUnitTest extends GATKBaseTest {
         }
     }
 
+    private static class BreakpointEvidenceFactory {
+        final ReadMetadata readMetadata;
+
+        BreakpointEvidenceFactory(final ReadMetadata readMetadata) {
+            this.readMetadata = readMetadata;
+        }
+
+        /**
+         * Returns BreakpointEvidence constructed from string representation. Used to reconstruct BreakpointEvidence for
+         * unit tests. It is intended for stringRep() to be an inverse of this function, but not the other way around. i.e.
+         *      fromStringRep(strRep, readMetadata).stringRep(readMetadata, minEvidenceMapQ) == strRep
+         * but it may be the case that
+         *      fromStringRep(evidence.stringRep(readMetadata, minEvidenceMapQ), readMetadata) != evidence
+         */
+        BreakpointEvidence fromStringRep(final String strRep) {
+            final String[] words = strRep.split("\t");
+
+            final SVInterval location = locationFromStringRep(words[0]);
+
+            final int weight = Integer.parseInt(words[1]);
+
+            final String evidenceType = words[2];
+            if(evidenceType.equals("TemplateSizeAnomaly")) {
+                final int readCount = Integer.parseInt(words[4]);
+                return new BreakpointEvidence.TemplateSizeAnomaly(location, weight, readCount);
+            } else {
+                final List<StrandedInterval> distalTargets = words[3].isEmpty() ? new ArrayList<>()
+                        : Arrays.stream(words[3].split(";")).map(BreakpointEvidenceFactory::strandedLocationFromStringRep)
+                        .collect(Collectors.toList());
+                validateArg(distalTargets.size() <= 1, "BreakpointEvidence must have 0 or 1 distal targets");
+                final String[] templateParts = words[4].split("/");
+                final String templateName = templateParts[0];
+                final TemplateFragmentOrdinal fragmentOrdinal;
+                if(templateParts.length <= 1) {
+                    fragmentOrdinal = TemplateFragmentOrdinal.UNPAIRED;
+                } else switch (templateParts[1]) {
+                    case "0":
+                        fragmentOrdinal = TemplateFragmentOrdinal.PAIRED_INTERIOR;
+                        break;
+                    case "1":
+                        fragmentOrdinal = TemplateFragmentOrdinal.PAIRED_FIRST;
+                        break;
+                    case "2":
+                        fragmentOrdinal = TemplateFragmentOrdinal.PAIRED_SECOND;
+                        break;
+                    case "?":
+                        fragmentOrdinal = TemplateFragmentOrdinal.PAIRED_UNKNOWN;
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Unknown Template Fragment Ordinal: /" + templateParts[1]);
+                }
+                final boolean forwardStrand = words[5].equals("1");
+                final int templateSize = Integer.parseInt(words[6]);
+                final String cigarString = words[7];
+                final int mappingQuality = Integer.parseInt(words[8]);
+                final String readGroup = "Pond-Testing"; // for now, just fake this, only for testing.
+                final boolean validated = false;
+
+
+                final SVInterval target;
+                final boolean targetForwardStrand;
+                final int targetQuality;
+                switch(distalTargets.size()) {
+                    case 0:
+                        target = new SVInterval(0, 0, 0);
+                        targetForwardStrand = false;
+                        targetQuality = -1;
+                        break;
+                    case 1:
+                        target = distalTargets.get(0).getInterval();
+                        targetForwardStrand = distalTargets.get(0).getStrand();
+                        targetQuality = Integer.MAX_VALUE;
+                        break;
+                    default:
+                        throw new IllegalArgumentException("BreakpointEvidence must have <= 1 distal target");
+                }
+
+                switch(evidenceType) {
+                    case "SplitRead":
+                        return new BreakpointEvidence.SplitRead(location, weight, templateName, fragmentOrdinal, validated,
+                                forwardStrand, cigarString, mappingQuality, templateSize, readGroup, distalTargets,
+                                readMetadata);
+                    case "LargeIndel":
+                        Utils.validateArg(distalTargets.isEmpty(), "LargeIndel should have no distal targets");
+                        return new BreakpointEvidence.LargeIndel(location, weight, templateName, fragmentOrdinal, validated,
+                                forwardStrand, cigarString, mappingQuality, templateSize, readGroup);
+
+                    case "MateUnmapped":
+                        Utils.validateArg(distalTargets.isEmpty(), "MateUnmapped should have no distal targets");
+                        return new BreakpointEvidence.MateUnmapped(location, weight, templateName, fragmentOrdinal, validated,
+                                forwardStrand, cigarString, mappingQuality, templateSize, readGroup);
+
+                    case "InterContigPair":
+                        return new BreakpointEvidence.InterContigPair(
+                                location, weight, templateName, fragmentOrdinal, validated, forwardStrand, cigarString,
+                                mappingQuality, templateSize, readGroup, target, targetForwardStrand, targetQuality
+                        );
+
+                    case "OutiesPair":
+                        return new BreakpointEvidence.OutiesPair(
+                                location, weight, templateName, fragmentOrdinal, validated, forwardStrand, cigarString,
+                                mappingQuality, templateSize, readGroup, target, targetForwardStrand, targetQuality
+                        );
+
+                    case "SameStrandPair":
+                        return new BreakpointEvidence.SameStrandPair(
+                                location, weight, templateName, fragmentOrdinal, validated, forwardStrand, cigarString,
+                                mappingQuality, templateSize, readGroup, target, targetForwardStrand, targetQuality
+                        );
+
+                    case "WeirdTemplateSize":
+                        return new BreakpointEvidence.WeirdTemplateSize(
+                                location, weight, templateName, fragmentOrdinal, validated, forwardStrand, cigarString,
+                                mappingQuality, templateSize, readGroup, target, targetForwardStrand, targetQuality
+                        );
+                    default:
+                        throw new IllegalArgumentException("Unknown BreakpointEvidence type: " + evidenceType);
+                }
+            }
+        }
+
+        private static SVInterval locationFromStringRep(final String locationStr) {
+            final String[] locationParts = locationStr.split("[\\[\\]:]");
+            validateArg(locationParts.length >= 2, "Could not parse SVInterval from string");
+            final int contig = Integer.parseInt(locationParts[0]);
+            final int start = Integer.parseInt(locationParts[1]);
+            final int end = Integer.parseInt(locationParts[2]);
+            return new SVInterval(contig, start, end);
+        }
+
+        private static StrandedInterval strandedLocationFromStringRep(final String locationStr) {
+            final String[] locationParts = locationStr.split("[\\[\\]:]");
+            validateArg(locationParts.length == 4, "Could not parse StrandedInterval from string");
+            final int contig = Integer.parseInt(locationParts[0]);
+            final int start = Integer.parseInt(locationParts[1]);
+            final int end = Integer.parseInt(locationParts[2]);
+            final boolean strand = locationParts[3].equals("1");
+            return new StrandedInterval(new SVInterval(contig, start, end), strand);
+        }
+
+    }
+
     private static class ClassifierAccuracyData extends JsonMatrixLoader {
         final EvidenceFeatures[] features;
         final double[] yProba;
@@ -424,4 +572,6 @@ public class XGBoostEvidenceFilterUnitTest extends GATKBaseTest {
             }
         }
     }
+
+
 }
