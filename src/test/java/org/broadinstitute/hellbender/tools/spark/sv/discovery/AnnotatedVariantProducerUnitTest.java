@@ -275,7 +275,7 @@ public class AnnotatedVariantProducerUnitTest extends GATKBaseTest {
                 .chr("20").start(200).stop(300)
                 .alleles("N", SimpleSVType.ImpreciseDeletion.createBracketedSymbAlleleString(SYMB_ALT_ALLELE_DEL))
                 .attribute(VCFConstants.END_KEY, 300)
-                .attribute(SVTYPE, SimpleSVType.TYPES.DEL.toString())
+                .attribute(SVTYPE, SimpleSVType.SupportedType.DEL.toString())
                 .make();
 
         final VariantContext annotatedVC = new VariantContextBuilder()
@@ -283,7 +283,7 @@ public class AnnotatedVariantProducerUnitTest extends GATKBaseTest {
                 .chr("20").start(200).stop(300)
                 .alleles("N", SimpleSVType.ImpreciseDeletion.createBracketedSymbAlleleString(SYMB_ALT_ALLELE_DEL))
                 .attribute(VCFConstants.END_KEY, 300)
-                .attribute(SVTYPE, SimpleSVType.TYPES.DEL.toString())
+                .attribute(SVTYPE, SimpleSVType.SupportedType.DEL.toString())
                 .attribute(READ_PAIR_SUPPORT, 7)
                 .attribute(SPLIT_READ_SUPPORT, 5)
                 .make();

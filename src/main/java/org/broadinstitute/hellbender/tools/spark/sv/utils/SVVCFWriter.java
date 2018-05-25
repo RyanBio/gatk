@@ -57,11 +57,14 @@ public class SVVCFWriter {
 
         variantsCountByType.forEach((key, value) -> logger.info(key + ": " + value));
 
-        final Set<String> knownTypes = new HashSet<>( EnumUtils.getEnumMap(SimpleSVType.TYPES.class).keySet() );
-        knownTypes.add(BreakEndVariantType.InvSuspectBND.INV33_BND);
-        knownTypes.add(BreakEndVariantType.InvSuspectBND.INV55_BND);
-        knownTypes.add(BreakEndVariantType.TransLocBND.STRANDSWITCHLESS_BND);
+        final Set<String> knownTypes = new HashSet<>( EnumUtils.getEnumMap(SimpleSVType.SupportedType.class).keySet() );
+
         knownTypes.add(GATKSVVCFConstants.CPX_SV_SYB_ALT_ALLELE_STR);
+
+        for (final BreakEndVariantType.SupportedType supportedType : BreakEndVariantType.SupportedType.values()) {
+            knownTypes.add(supportedType.name());
+        }
+
         Sets.difference(knownTypes, variantsCountByType.keySet()).forEach(key -> logger.info(key + ": " + 0));
     }
 

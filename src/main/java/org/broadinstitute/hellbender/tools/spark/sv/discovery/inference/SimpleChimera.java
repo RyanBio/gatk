@@ -164,6 +164,28 @@ public class SimpleChimera {
         }
     }
 
+    /**
+     * For the two alignments, test if the alignment that has lower coordinate on read/contig
+     * has a higher coordinate (as specified by {@code referenceDictionary}) on reference.
+     *
+     * This could happen for simple insertions/deletions when the evidence contig is
+     * <ul>
+     *     <li>a reverse strand representation of a simple event, or</li>
+     *     <li>a reverse strand representation of left breakpoint of inversion, or</li>
+     *     <li>a reverse strand representation of right breakpoint of inversion, or</li>
+     *     <li>a forward strand representation of a ref-order swap event (e.g. large tandem duplication breakpoint suspect)</li>
+     *     <li>a reverse strand representation of inter-chromosomal events, except one scenario
+     *          where the two forward strand mapping alignments jump from a higher ref coordinate to a lower coordinate
+     *          (see definition/convention of strand representation in
+     *          {@link #isForwardStrandRepresentation(AlignmentInterval, AlignmentInterval, StrandSwitch, SAMSequenceDictionary)}
+     *     </li>
+     * </ul>
+     */
+    private boolean firstContigRegionRefSpanAfterSecond(final SAMSequenceDictionary referenceDictionary){
+        return IntervalUtils.compareLocatables(regionWithLowerCoordOnContig.referenceSpan, regionWithHigherCoordOnContig.referenceSpan,
+                referenceDictionary) > 0;
+    }
+
     // =================================================================================================================
 
     /**
@@ -171,7 +193,7 @@ public class SimpleChimera {
      * alignments overlap or are distant from each other, infer the possible simple breakpoint type.
      * @throws IllegalArgumentException when the simple chimera indicates strand switch or simple translocation or incomplete picture.
      */
-    TypeInferredFromSimpleChimera inferType() {
+    TypeInferredFromSimpleChimera inferType(final SAMSequenceDictionary referenceDictionary) {
 
         if ( isCandidateSimpleTranslocation()) { // see {@link SimpleChimera.isCandidateSimpleTranslocation()} for definition
             final boolean sameChromosomeEvent =
@@ -180,12 +202,24 @@ public class SimpleChimera {
             if ( sameChromosomeEvent ) {
                 return TypeInferredFromSimpleChimera.INTRA_CHR_REF_ORDER_SWAP;
             } else {
-                return TypeInferredFromSimpleChimera.INTER_CHROMOSOME;
+                if (strandSwitch.equals(StrandSwitch.FORWARD_TO_REVERSE)) {
+                    return TypeInferredFromSimpleChimera.INTER_CHR_STRAND_SWITCH_55;
+                } else if (strandSwitch.equals(StrandSwitch.REVERSE_TO_FORWARD)) {
+                    return TypeInferredFromSimpleChimera.INTER_CHR_STRAND_SWITCH_33;
+                } else { // no switch, but still need to distinguish between cases of pair WX vs UV in Fig. 7 in Section 5.4 of VCF spec ver.4.2
+                    if (isForwardStrandRepresentation == firstContigRegionRefSpanAfterSecond(referenceDictionary) ){
+                        return TypeInferredFromSimpleChimera.INTER_CHR_NO_SS_WITH_LEFT_MATE_FIRST_IN_PARTNER;
+                    } else {
+                        return TypeInferredFromSimpleChimera.INTER_CHR_NO_SS_WITH_LEFT_MATE_SECOND_IN_PARTNER;
+                    }
+                }
             }
         } else {
-            if (strandSwitch != StrandSwitch.NO_SWITCH) {
+            if (strandSwitch.equals(StrandSwitch.FORWARD_TO_REVERSE)) {
                 // TODO: 9/9/17 the case involves an inversion, could be retired once same chr strand-switch BND calls are evaluated.
-                return TypeInferredFromSimpleChimera.INTRA_CHR_STRAND_SWITCH;
+                return TypeInferredFromSimpleChimera.INTRA_CHR_STRAND_SWITCH_55;
+            } else if (strandSwitch.equals(StrandSwitch.REVERSE_TO_FORWARD)) {
+                return TypeInferredFromSimpleChimera.INTRA_CHR_STRAND_SWITCH_33;
             } else {
                 final DistancesBetweenAlignmentsOnRefAndOnRead distances = getDistancesBetweenAlignmentsOnRefAndOnRead();
                 final int distBetweenAlignRegionsOnRef = distances.distBetweenAlignRegionsOnRef, // distance-1 between the two regions on reference, denoted as d1 in the comments below

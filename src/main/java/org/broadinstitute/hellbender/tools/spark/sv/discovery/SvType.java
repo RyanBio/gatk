@@ -37,5 +37,4 @@ public abstract class SvType {
     public final Map<String, String> getTypeSpecificAttributes() {
         return extraAttributes;
     }
-    public abstract boolean isBreakEndOnly();
 }

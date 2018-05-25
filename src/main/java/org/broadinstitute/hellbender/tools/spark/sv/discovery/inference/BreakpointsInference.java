@@ -92,12 +92,16 @@ abstract class BreakpointsInference {
                                                         final byte[] contigSequence,
                                                         final SAMSequenceDictionary referenceDictionary) {
 
-        switch (simpleChimera.inferType()) {
-            case INTER_CHROMOSOME:
+        switch (simpleChimera.inferType(referenceDictionary)) {
+            case INTER_CHR_STRAND_SWITCH_55:
+            case INTER_CHR_STRAND_SWITCH_33:
+            case INTER_CHR_NO_SS_WITH_LEFT_MATE_FIRST_IN_PARTNER:
+            case INTER_CHR_NO_SS_WITH_LEFT_MATE_SECOND_IN_PARTNER:
                 return new InterChromosomeBreakpointsInference(simpleChimera, contigSequence, referenceDictionary);
             case INTRA_CHR_REF_ORDER_SWAP:
                 return new IntraChrRefOrderSwapBreakpointsInference(simpleChimera, contigSequence, referenceDictionary);
-            case INTRA_CHR_STRAND_SWITCH:
+            case INTRA_CHR_STRAND_SWITCH_55:
+            case INTRA_CHR_STRAND_SWITCH_33:
                 return new IntraChrStrandSwitchBreakpointInference(simpleChimera, contigSequence, referenceDictionary);
             case SIMPLE_DEL:
             case RPL:

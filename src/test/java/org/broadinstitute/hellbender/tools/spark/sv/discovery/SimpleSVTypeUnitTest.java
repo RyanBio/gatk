@@ -74,19 +74,19 @@ public class SimpleSVTypeUnitTest extends GATKBaseTest {
 
         // simple deletion
         data.add(new Object[]{forSimpleDeletion_plus.biPathBubble, inferSimpleTypeFromNovelAdjacency(forSimpleDeletion_plus.biPathBubble),
-                SYMB_ALT_ALLELE_DEL, -20, SimpleSVType.TYPES.DEL.name()});
+                SYMB_ALT_ALLELE_DEL, -20, SimpleSVType.SupportedType.DEL.name()});
 
         // simple insertion
         data.add(new Object[]{forSimpleInsertion_minus.biPathBubble, inferSimpleTypeFromNovelAdjacency(forSimpleInsertion_minus.biPathBubble),
-                SYMB_ALT_ALLELE_INS, 50, SimpleSVType.TYPES.INS.name()});
+                SYMB_ALT_ALLELE_INS, 50, SimpleSVType.SupportedType.INS.name()});
 
         // long range substitution (i.e. scarred deletion)
         data.add(new Object[]{forLongRangeSubstitution_fudgedDel_plus.biPathBubble, inferSimpleTypeFromNovelAdjacency(forLongRangeSubstitution_fudgedDel_plus.biPathBubble),
-                SYMB_ALT_ALLELE_DEL, -60, SimpleSVType.TYPES.DEL.name()});
+                SYMB_ALT_ALLELE_DEL, -60, SimpleSVType.SupportedType.DEL.name()});
 
         // simple deletion with homology
         data.add(new Object[]{forDeletionWithHomology_minus.biPathBubble, inferSimpleTypeFromNovelAdjacency(forDeletionWithHomology_minus.biPathBubble),
-                SYMB_ALT_ALLELE_DEL, -38, SimpleSVType.TYPES.DEL.name()});
+                SYMB_ALT_ALLELE_DEL, -38, SimpleSVType.SupportedType.DEL.name()});
 
         // simple tandem dup contraction from 2 units to 1 unit
         data.add(new Object[]{forSimpleTanDupContraction_plus.biPathBubble, inferSimpleTypeFromNovelAdjacency(forSimpleTanDupContraction_plus.biPathBubble),
@@ -165,30 +165,30 @@ public class SimpleSVTypeUnitTest extends GATKBaseTest {
 
         // simple deletion
         data.add(new Object[]{forSimpleDeletion_plus.biPathBubble, forSimpleDeletion_plus.biPathBubble.toSimpleOrBNDTypes(SVDiscoveryTestUtilsAndCommonDataProvider.b37_reference_20_21, SVDiscoveryTestUtilsAndCommonDataProvider.b37_seqDict_20_21).get(0),
-                SYMB_ALT_ALLELE_DEL, -20, SimpleSVType.TYPES.DEL.name()});
+                SYMB_ALT_ALLELE_DEL, -20, SimpleSVType.SupportedType.DEL.name()});
 
         // simple insertion
         data.add(new Object[]{forSimpleInsertion_minus.biPathBubble, forSimpleInsertion_minus.biPathBubble.toSimpleOrBNDTypes(SVDiscoveryTestUtilsAndCommonDataProvider.b37_reference_20_21, SVDiscoveryTestUtilsAndCommonDataProvider.b37_seqDict_20_21).get(0),
-                SYMB_ALT_ALLELE_INS, 50, SimpleSVType.TYPES.INS.name()});
+                SYMB_ALT_ALLELE_INS, 50, SimpleSVType.SupportedType.INS.name()});
 
         // long range substitution fudged del
         data.add(new Object[]{forLongRangeSubstitution_fudgedDel_plus.biPathBubble, forLongRangeSubstitution_fudgedDel_plus.biPathBubble.toSimpleOrBNDTypes(SVDiscoveryTestUtilsAndCommonDataProvider.b37_reference_20_21, SVDiscoveryTestUtilsAndCommonDataProvider.b37_seqDict_20_21).get(0),
-                SYMB_ALT_ALLELE_DEL, -60, SimpleSVType.TYPES.DEL.name()});
+                SYMB_ALT_ALLELE_DEL, -60, SimpleSVType.SupportedType.DEL.name()});
 
         // long range substitution fat ins
         data.add(new Object[]{forLongRangeSubstitution_fatIns_minus.biPathBubble, forLongRangeSubstitution_fatIns_plus.biPathBubble.toSimpleOrBNDTypes(SVDiscoveryTestUtilsAndCommonDataProvider.b37_reference_20_21, SVDiscoveryTestUtilsAndCommonDataProvider.b37_seqDict_20_21).get(0),
-                SYMB_ALT_ALLELE_INS, 60, SimpleSVType.TYPES.INS.name()});
+                SYMB_ALT_ALLELE_INS, 60, SimpleSVType.SupportedType.INS.name()});
 
         // long range substitution fat ins
         List<SvType> svTypes = forLongRangeSubstitution_DelAndIns_plus.biPathBubble.toSimpleOrBNDTypes(SVDiscoveryTestUtilsAndCommonDataProvider.b37_reference_20_21, SVDiscoveryTestUtilsAndCommonDataProvider.b37_seqDict_20_21);
         data.add(new Object[]{forLongRangeSubstitution_DelAndIns_plus.biPathBubble, svTypes.get(0),
-                SYMB_ALT_ALLELE_DEL, -60, SimpleSVType.TYPES.DEL.name()});
+                SYMB_ALT_ALLELE_DEL, -60, SimpleSVType.SupportedType.DEL.name()});
         data.add(new Object[]{forLongRangeSubstitution_DelAndIns_plus.biPathBubble, svTypes.get(1),
-                SYMB_ALT_ALLELE_INS, 55, SimpleSVType.TYPES.INS.name()});
+                SYMB_ALT_ALLELE_INS, 55, SimpleSVType.SupportedType.INS.name()});
 
         // simple deletion with homology
         data.add(new Object[]{forDeletionWithHomology_minus.biPathBubble, forDeletionWithHomology_minus.biPathBubble.toSimpleOrBNDTypes(SVDiscoveryTestUtilsAndCommonDataProvider.b37_reference_20_21, SVDiscoveryTestUtilsAndCommonDataProvider.b37_seqDict_20_21).get(0),
-                SYMB_ALT_ALLELE_DEL, -38, SimpleSVType.TYPES.DEL.name()});
+                SYMB_ALT_ALLELE_DEL, -38, SimpleSVType.SupportedType.DEL.name()});
 
         // simple tandem dup contraction from 2 units to 1 unit
         data.add(new Object[]{forSimpleTanDupContraction_plus.biPathBubble, forSimpleTanDupContraction_plus.biPathBubble.toSimpleOrBNDTypes(SVDiscoveryTestUtilsAndCommonDataProvider.b37_reference_20_21, SVDiscoveryTestUtilsAndCommonDataProvider.b37_seqDict_20_21).get(0),
@@ -198,7 +198,7 @@ public class SimpleSVTypeUnitTest extends GATKBaseTest {
         // simple tandem dup expansion from 1 unit to 2 units that will be called as insertion
         data.add(new Object[]{forSimpleTanDupExpansion_ins_minus.biPathBubble, forSimpleTanDupExpansion_ins_minus.biPathBubble.toSimpleOrBNDTypes(SVDiscoveryTestUtilsAndCommonDataProvider.b37_reference_20_21, SVDiscoveryTestUtilsAndCommonDataProvider.b37_seqDict_20_21).get(0),
                 SYMB_ALT_ALLELE_INS, 10,
-                SimpleSVType.TYPES.INS.name()});
+                SimpleSVType.SupportedType.INS.name()});
 
         // simple tandem dup expansion from 1 unit to 2 units that will be called as duplication
         data.add(new Object[]{forSimpleTanDupExpansion_dup_minus.biPathBubble, forSimpleTanDupExpansion_dup_minus.biPathBubble.toSimpleOrBNDTypes(SVDiscoveryTestUtilsAndCommonDataProvider.b37_reference_20_21, SVDiscoveryTestUtilsAndCommonDataProvider.b37_seqDict_20_21).get(0),
@@ -208,7 +208,7 @@ public class SimpleSVTypeUnitTest extends GATKBaseTest {
         // simple tandem dup expansion from 1 unit to 2 units and novel insertion that will be called as insertion
         data.add(new Object[]{forSimpleTanDupExpansionWithNovelIns_ins_plus.biPathBubble, forSimpleTanDupExpansionWithNovelIns_ins_plus.biPathBubble.toSimpleOrBNDTypes(SVDiscoveryTestUtilsAndCommonDataProvider.b37_reference_20_21, SVDiscoveryTestUtilsAndCommonDataProvider.b37_seqDict_20_21).get(0),
                 SYMB_ALT_ALLELE_INS, 326,
-                SimpleSVType.TYPES.INS.name()});
+                SimpleSVType.SupportedType.INS.name()});
 
         // simple tandem dup expansion from 1 unit to 2 units and novel insertion that will be called as duplication
         data.add(new Object[]{forSimpleTanDupExpansionWithNovelIns_dup_plus.biPathBubble, forSimpleTanDupExpansionWithNovelIns_dup_plus.biPathBubble.toSimpleOrBNDTypes(SVDiscoveryTestUtilsAndCommonDataProvider.b37_reference_20_21, SVDiscoveryTestUtilsAndCommonDataProvider.b37_seqDict_20_21).get(0),
@@ -239,11 +239,11 @@ public class SimpleSVTypeUnitTest extends GATKBaseTest {
         // short tandem dup expansion from 1 unit to 2 units with pseudo-homology
         data.add(new Object[]{forComplexTanDup_1to2_short_pseudoHom_plus.biPathBubble, forComplexTanDup_1to2_short_pseudoHom_plus.biPathBubble.toSimpleOrBNDTypes(SVDiscoveryTestUtilsAndCommonDataProvider.b37_reference_20_21, SVDiscoveryTestUtilsAndCommonDataProvider.b37_seqDict_20_21).get(0),
                 SYMB_ALT_ALLELE_INS, 42,
-                SimpleSVType.TYPES.INS.name()});
+                SimpleSVType.SupportedType.INS.name()});
         // short tandem dup expansion from 2 units to 3 units
         data.add(new Object[]{forComplexTanDup_2to3_short_noPseudoHom_minus.biPathBubble, forComplexTanDup_2to3_short_noPseudoHom_minus.biPathBubble.toSimpleOrBNDTypes(SVDiscoveryTestUtilsAndCommonDataProvider.b37_reference_20_21, SVDiscoveryTestUtilsAndCommonDataProvider.b37_seqDict_20_21).get(0),
                 SYMB_ALT_ALLELE_INS, 42,
-                SimpleSVType.TYPES.INS.name()});
+                SimpleSVType.SupportedType.INS.name()});
 
         return data.toArray(new Object[data.size()][]);
     }

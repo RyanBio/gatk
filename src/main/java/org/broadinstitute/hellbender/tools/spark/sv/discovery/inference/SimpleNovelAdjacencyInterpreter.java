@@ -171,7 +171,7 @@ public final class SimpleNovelAdjacencyInterpreter {
             throw new GATKException("Wrong number of variants sent for analysis: " + pair._2.toString() +
                     "\nWe currently only support 1 (symbolic simple or CPX) or 2 (BND mate pairs) variants for producing annotated variants.");
         }
-        if ( ! svTypes.get(0).isBreakEndOnly() ) { // simple SV type
+        if ( ! (svTypes.get(0) instanceof BreakEndVariantType) ) { // simple SV type
             final NovelAdjacencyAndAltHaplotype narl = simpleNovelAdjacencyAndChimericAlignmentEvidence.getNovelAdjacencyReferenceLocations();
             final List<SimpleChimera> contigEvidence = simpleNovelAdjacencyAndChimericAlignmentEvidence.getAlignmentEvidence();
 
