@@ -26,10 +26,7 @@ import org.broadinstitute.hellbender.utils.read.ReadUtils;
 import org.broadinstitute.hellbender.utils.read.markduplicates.ReadsKey;
 import scala.Tuple2;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Determine if two potentially identical BAMs have the same duplicate reads. This tool is useful for checking if two
@@ -119,6 +116,10 @@ public final class CompareDuplicatesSpark extends GATKSparkTool {
         } else {
             traversalParameters = null;
         }
+//        JavaRDD<GATKRead> firstReads  =  filteredReads(readsSource1.getParallelReads(input2, null, traversalParameters, bamPartitionSplitSize), input2);
+//
+//        ReadsSparkSource readsSource2 = new ReadsSparkSource(ctx, readArguments.getReadValidationStringency());
+
         JavaRDD<GATKRead> secondReads =  filteredReads(readsSource2.getParallelReads(input2, null, traversalParameters, bamPartitionSplitSize), input2);
 
         // Start by verifying that we have same number of reads and duplicates in each BAM.
@@ -154,43 +155,72 @@ public final class CompareDuplicatesSpark extends GATKSparkTool {
                 ReadUtils.getLibrary(read, bHeader.getValue())), read));
         JavaPairRDD<Integer, Tuple2<Iterable<GATKRead>, Iterable<GATKRead>>> cogroup = firstKeyed.cogroup(secondKeyed, getRecommendedNumReducers());
 
-
-        // Produces an RDD of MatchTypes, e.g., EQUAL, DIFFERENT_REPRESENTATIVE_READ, etc. per MarkDuplicates key,
-        // which is approximately start position x strand.
-        JavaRDD<MatchType> tagged = cogroup.map(v1 -> {
-            SAMFileHeader header = bHeader.getValue();
+        JavaRDD<Tuple2<Iterable<GATKRead>, Iterable<GATKRead>>> subsettedByStart = cogroup.flatMap(v1 -> {
+            List<Tuple2<Iterable<GATKRead>, Iterable<GATKRead>>> out = new ArrayList<>();
 
             Iterable<GATKRead> iFirstReads = v1._2()._1();
             Iterable<GATKRead> iSecondReads = v1._2()._2();
+
+            Map<Integer, List<GATKRead>> firstReadsMap = splitByStart(iFirstReads);
+            Map<Integer, List<GATKRead>> secondReadsMap = splitByStart(iSecondReads);
+
+            for (Integer i : firstReadsMap.keySet()) {
+                out.add(new Tuple2<>(firstReadsMap.get(i), secondReadsMap.get(i)));
+            }
+            return out.iterator();
+        });
+
+        // Produces an RDD of MatchTypes, e.g., EQUAL, DIFFERENT_REPRESENTATIVE_READ, etc. per MarkDuplicates key,
+        // which is approximately start position x strand.
+        JavaRDD<MatchType> tagged = subsettedByStart.map(v1 -> {
+            SAMFileHeader header = bHeader.getValue();
+
+            Iterable<GATKRead> iFirstReads = v1._1();
+            Iterable<GATKRead> iSecondReads = v1._2();
 
             return getDupes(iFirstReads, iSecondReads, header);
         });
 
         if (output!=null) {
-            JavaPairRDD<Integer, Tuple2<Iterable<GATKRead>, Iterable<GATKRead>>> unequalGroups = cogroup.filter(v1 -> {
+
+            JavaRDD<Tuple2<Iterable<GATKRead>, Iterable<GATKRead>>> unequalGroups = subsettedByStart.filter(v1 -> {
                 SAMFileHeader header = bHeader.getValue();
 
-                Iterable<GATKRead> iFirstReads = v1._2()._1();
-                Iterable<GATKRead> iSecondReads = v1._2()._2();
+                Iterable<GATKRead> iFirstReads = v1._1();
+                Iterable<GATKRead> iSecondReads = v1._2();
 
                 MatchType type = getDupes(iFirstReads, iSecondReads, header);
 
                 return type!=MatchType.EQUAL;
             });
 
-            Broadcast<Tuple2<String, String>> sourceNames = ctx.broadcast(new Tuple2<>(getReadSourceName(), input2));
+            List<String> names = subsettedByStart.flatMap(v1 -> {
+                Set<String> out = new HashSet<>();
 
-            JavaRDD<GATKRead> readsMapped = unequalGroups.flatMap(v1 -> {
+                Iterable<GATKRead> iFirstReads = v1._1();
+                Iterable<GATKRead> iSecondReads = v1._2();
+
+                iFirstReads.forEach(read -> out.add(read.getName()));
+                iSecondReads.forEach(read -> out.add(read.getName()));
+
+                return out.iterator();
+            }).collect();
+
+            Broadcast<Set<String>> nameSet = ctx.broadcast(new HashSet<>(names));
+
+            Broadcast<Tuple2<String, String>> sourceFiles = ctx.broadcast(new Tuple2<>(getReadSourceName(), input2));
+
+            JavaRDD<GATKRead> readsMapped = cogroup.flatMap(v1 -> {
                 final List<GATKRead> out = new ArrayList<>();
 
                 Iterable<GATKRead> iFirstReads = v1._2()._1();
                 Iterable<GATKRead> iSecondReads = v1._2()._2();
 
-                iFirstReads.forEach(read -> {read.setAttribute("in","<I1>:"+sourceNames.value()._1); out.add(read);});
-                iSecondReads.forEach(read -> {read.setAttribute("in","<I2>:"+sourceNames.value()._2); out.add(read);});
+                iFirstReads.forEach(read -> {read.setAttribute("in","I1"); out.add(read);});
+                iSecondReads.forEach(read -> {read.setAttribute("in","I2"); out.add(read);});
 
                 return out.iterator();
-            });
+            }).filter(read -> nameSet.value().contains(read.getName()));
 
             SAMFileHeader headerForwrite = bHeader.getValue();
             headerForwrite.setAttribute("in","original read file source");
@@ -223,6 +253,23 @@ public final class CompareDuplicatesSpark extends GATKSparkTool {
                 }
             }
         }
+    }
+
+    private static Map<Integer, List<GATKRead>> splitByStart(Iterable<GATKRead> duplicateGroup) {
+        final Map<Integer, List<GATKRead>> byType = new HashMap<>();
+        for(GATKRead read: duplicateGroup) {
+            byType.compute(ReadUtils.getStrandedUnclippedStart(read), (key, value) -> {
+                if (value == null) {
+                    final ArrayList<GATKRead> reads = new ArrayList<>();
+                    reads.add(read);
+                    return reads;
+                } else {
+                    value.add(read);
+                    return value;
+                }
+            });
+        }
+        return byType;
     }
 
     /**
