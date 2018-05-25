@@ -194,7 +194,7 @@ public final class CompareDuplicatesSpark extends GATKSparkTool {
                 return type!=MatchType.EQUAL;
             });
 
-            List<String> names = subsettedByStart.flatMap(v1 -> {
+            List<String> names = unequalGroups.flatMap(v1 -> {
                 Set<String> out = new HashSet<>();
 
                 Iterable<GATKRead> iFirstReads = v1._1();
@@ -207,9 +207,7 @@ public final class CompareDuplicatesSpark extends GATKSparkTool {
             }).collect();
 
             Broadcast<Set<String>> nameSet = ctx.broadcast(new HashSet<>(names));
-
-            Broadcast<Tuple2<String, String>> sourceFiles = ctx.broadcast(new Tuple2<>(getReadSourceName(), input2));
-
+            
             JavaRDD<GATKRead> readsMapped = cogroup.flatMap(v1 -> {
                 final List<GATKRead> out = new ArrayList<>();
 
