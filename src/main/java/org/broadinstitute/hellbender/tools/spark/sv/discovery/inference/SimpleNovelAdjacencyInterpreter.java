@@ -78,8 +78,7 @@ public final class SimpleNovelAdjacencyInterpreter {
         final StructuralVariationDiscoveryArgumentCollection.DiscoverVariantsFromContigsAlignmentsSparkArgumentCollection
                 discoverStageArgs = svDiscoveryInputMetaData.getDiscoverStageArgs();
         final Logger toolLogger = svDiscoveryInputMetaData.getToolLogger();
-        SvDiscoveryUtils.evaluateIntervalsAndNarls(assembledIntervals, narls,
-                referenceSequenceDictionaryBroadcast.getValue(), discoverStageArgs, toolLogger);
+        SvDiscoveryUtils.evaluateIntervalsAndNarls(svDiscoveryInputMetaData, narls);
     }
 
     /**

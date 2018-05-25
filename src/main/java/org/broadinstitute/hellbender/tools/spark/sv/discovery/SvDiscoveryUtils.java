@@ -38,16 +38,17 @@ public class SvDiscoveryUtils {
     public static void evaluateIntervalsAndNarls( final SvDiscoveryInputMetaData svDiscoveryInputMetaData,
                                                   final List<NovelAdjacencyAndAltHaplotype> narls ) {
         final SAMSequenceDictionary refDict =
-                svDiscoveryInputMetaData.referenceData.referenceSequenceDictionaryBroadcast.getValue();
+                svDiscoveryInputMetaData.getReferenceData().getReferenceSequenceDictionaryBroadcast().getValue();
         final DiscoverVariantsFromContigsAlignmentsSparkArgumentCollection parameters =
-                svDiscoveryInputMetaData.discoverStageArgs;
+                svDiscoveryInputMetaData.getDiscoverStageArgs();
         final SVIntervalTree<String> narlyBreakpoints =
                 readBreakpointsFromNarls(narls, refDict, parameters.truthIntervalPadding);
 
-        final List<SVInterval> assembledIntervals = svDiscoveryInputMetaData.sampleSpecificData.assembledIntervals;
-        final List<AlignedAssemblyOrExcuse> intervalAssemblies =
-                svDiscoveryInputMetaData.sampleSpecificData.intervalAssemblies;
-        final SAMFileHeader header = svDiscoveryInputMetaData.sampleSpecificData.headerBroadcast.getValue();
+        final SvDiscoveryInputMetaData.SampleSpecificData sampleSpecificData =
+                svDiscoveryInputMetaData.getSampleSpecificData();
+        final List<SVInterval> assembledIntervals = sampleSpecificData.getAssembledIntervals();
+        final List<AlignedAssemblyOrExcuse> intervalAssemblies = sampleSpecificData.intervalAssemblies;
+        final SAMFileHeader header = sampleSpecificData.getHeaderBroadcast().getValue();
         if ( parameters.truthVCF == null ) {
             if ( parameters.intervalFile != null && intervalAssemblies != null ) {
                 AlignedAssemblyOrExcuse.writeIntervalFile(
@@ -65,7 +66,7 @@ public class SvDiscoveryUtils {
             final SVIntervalTree<String> trueBreakpoints =
                     SVVCFReader.readBreakpointsFromTruthVCF(parameters.truthVCF, refDict, parameters.truthIntervalPadding);
 
-            final Logger toolLogger = svDiscoveryInputMetaData.toolLogger;
+            final Logger toolLogger = svDiscoveryInputMetaData.getToolLogger();
             if ( assembledIntervals != null ) {
                 evaluateIntervalsAgainstTruth(assembledIntervals, trueBreakpoints, toolLogger);
 
@@ -79,8 +80,7 @@ public class SvDiscoveryUtils {
                             narlyBreakpoints );
                 }
                 if ( parameters.narlsFile != null ) {
-                    writeNarls(parameters.narlsFile, narls, trueBreakpoints,
-                                svDiscoveryInputMetaData.referenceData.referenceSequenceDictionaryBroadcast.getValue());
+                    writeNarls(parameters.narlsFile, narls, trueBreakpoints, refDict);
                 }
             }
 
