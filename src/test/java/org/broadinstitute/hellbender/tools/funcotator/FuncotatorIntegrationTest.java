@@ -34,7 +34,7 @@ public class FuncotatorIntegrationTest extends CommandLineProgramTest {
 
     // Whether to do debug output (i.e. leave output around).
     // This should always be false when checked in.
-    private static final boolean doDebugTests             = false;
+    private static final boolean doDebugTests             = true;
     private static final String  LARGE_DATASOURCES_FOLDER = "funcotator_dataSources_latest";
 
     private static final String PIK3CA_VCF_HG19 = toolsTestDir + "funcotator/0816201804HC0_R01C01.pik3ca.vcf";
@@ -203,24 +203,24 @@ public class FuncotatorIntegrationTest extends CommandLineProgramTest {
                         true,
                         FuncotatorTestConstants.REFERENCE_VERSION_HG19,
                 },
-                {
-                        "C828.TCGA-D3-A2JP-06A-11D-A19A-08.3-filtered.PASS.vcf",
-                        "Homo_sapiens_assembly19.fasta",
-                        true,
-                        FuncotatorTestConstants.REFERENCE_VERSION_HG19
-                },
-                {
-                        "hg38_test_variants.vcf",
-                        "Homo_sapiens_assembly38.fasta",
-                        false,
-                        FuncotatorTestConstants.REFERENCE_VERSION_HG38
-                },
-                {
-                        "sample21.trimmed.vcf",
-                        "Homo_sapiens_assembly38.fasta",
-                        false,
-                        FuncotatorTestConstants.REFERENCE_VERSION_HG38
-                }
+//                {
+//                        "C828.TCGA-D3-A2JP-06A-11D-A19A-08.3-filtered.PASS.vcf",
+//                        "Homo_sapiens_assembly19.fasta",
+//                        true,
+//                        FuncotatorTestConstants.REFERENCE_VERSION_HG19
+//                },
+//                {
+//                        "hg38_test_variants.vcf",
+//                        "Homo_sapiens_assembly38.fasta",
+//                        false,
+//                        FuncotatorTestConstants.REFERENCE_VERSION_HG38
+//                },
+//                {
+//                        "sample21.trimmed.vcf",
+//                        "Homo_sapiens_assembly38.fasta",
+//                        false,
+//                        FuncotatorTestConstants.REFERENCE_VERSION_HG38
+//                }
         };
     }
 
@@ -258,7 +258,7 @@ public class FuncotatorIntegrationTest extends CommandLineProgramTest {
     }
 
     @Test(enabled = doDebugTests,
-            groups = {"funcotatorValidation"},
+           // groups = {"funcotatorValidation"},
             dataProvider = "provideForLargeDataValidationTest")
     public void largeDataValidationTest(final String inputVcfName,
                                         final String referencePath,

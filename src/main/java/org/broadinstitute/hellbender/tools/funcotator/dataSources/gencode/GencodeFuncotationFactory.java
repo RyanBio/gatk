@@ -39,7 +39,12 @@ import static org.broadinstitute.hellbender.utils.codecs.gencode.GencodeGtfFeatu
  */
 public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
 
-    public static final String DATA_SOURCE_NAME = "Gencode";
+    //==================================================================================================================
+    // Public Static Members:
+    /**
+     * Default name for this data source.
+     */
+    public static final String DEFAULT_NAME = "Gencode";
 
     //==================================================================================================================
     // Private Static Members:
@@ -118,6 +123,11 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
     // Private Members:
 
     /**
+     * The name of this Gencode data source.
+     */
+    private final String name;
+
+    /**
      * ReferenceSequenceFile for the transcript reference file.
      */
     private final ReferenceDataSource transcriptFastaReferenceDataSource;
@@ -165,26 +175,27 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
     // Constructors:
 
     public GencodeFuncotationFactory(final Path gencodeTranscriptFastaFile, final String version) {
-        this(gencodeTranscriptFastaFile, version, FuncotatorArgumentDefinitions.TRANSCRIPT_SELECTION_MODE_DEFAULT_VALUE, new HashSet<>(), new LinkedHashMap<>());
+        this(gencodeTranscriptFastaFile, version, DEFAULT_NAME, FuncotatorArgumentDefinitions.TRANSCRIPT_SELECTION_MODE_DEFAULT_VALUE, new HashSet<>(), new LinkedHashMap<>());
     }
 
     public GencodeFuncotationFactory(final Path gencodeTranscriptFastaFile, final String version, final Set<String> userRequestedTranscripts) {
-        this(gencodeTranscriptFastaFile, version, FuncotatorArgumentDefinitions.TRANSCRIPT_SELECTION_MODE_DEFAULT_VALUE, userRequestedTranscripts, new LinkedHashMap<>());
+        this(gencodeTranscriptFastaFile, version, DEFAULT_NAME, FuncotatorArgumentDefinitions.TRANSCRIPT_SELECTION_MODE_DEFAULT_VALUE, userRequestedTranscripts, new LinkedHashMap<>());
     }
 
     public GencodeFuncotationFactory(final Path gencodeTranscriptFastaFile, final String version,final TranscriptSelectionMode transcriptSelectionMode) {
-        this(gencodeTranscriptFastaFile, version, transcriptSelectionMode, new HashSet<>(), new LinkedHashMap<>());
+        this(gencodeTranscriptFastaFile, version, DEFAULT_NAME, transcriptSelectionMode, new HashSet<>(), new LinkedHashMap<>());
     }
 
     public GencodeFuncotationFactory(final Path gencodeTranscriptFastaFile,
                                      final String version,
                                      final TranscriptSelectionMode transcriptSelectionMode,
                                      final Set<String> userRequestedTranscripts) {
-        this(gencodeTranscriptFastaFile, version, transcriptSelectionMode, userRequestedTranscripts, new LinkedHashMap<>());
+        this(gencodeTranscriptFastaFile, version, DEFAULT_NAME, transcriptSelectionMode, userRequestedTranscripts, new LinkedHashMap<>());
     }
 
     public GencodeFuncotationFactory(final Path gencodeTranscriptFastaFile,
                                      final String version,
+                                     final String name,
                                      final TranscriptSelectionMode transcriptSelectionMode,
                                      final Set<String> userRequestedTranscripts,
                                      final LinkedHashMap<String, String> annotationOverrides) {
@@ -197,6 +208,8 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
         this.transcriptSelectionMode = transcriptSelectionMode;
 
         this.version = version;
+
+        this.name = name;
 
         // Go through each requested transcript and remove the version numbers from them if they exist:
         this.userRequestedTranscripts = new HashSet<>();
@@ -231,7 +244,7 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
 
     @Override
     public String getName() {
-        return DATA_SOURCE_NAME;
+        return name;
     }
 
     @Override
