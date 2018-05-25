@@ -60,7 +60,7 @@ public class StreamingPythonScriptExecutor extends PythonExecutorBase {
 
     // keep track of when an ack request has been made and reject attempts to send another ack
     // request until the previous one has been handled
-    private boolean isAckOutstanding = false;
+    private boolean isAckRequestOutstanding = false;
 
     /**
      * The start method must be called to actually start the remote executable.
@@ -185,15 +185,14 @@ public class StreamingPythonScriptExecutor extends PythonExecutorBase {
 
     /**
      * Wait for an acknowledgement (which must have been previously requested).
-     * @return true if a positive acknowledgement (ack) is recieved, false if negative (nck)
+     * @return true if a positive acknowledgement (ack) is received, false if negative (nck)
      */
     public ProcessOutput waitForAck() {
-        if (!isAckOutstanding) {
-            throw new GATKException("An ack is already outstanding. The previous ack request must be retrieved" +
-                    " before a new ack request can be issued");
+        if (!isAckRequestOutstanding) {
+            throw new GATKException("No ack request is outstanding. An ack request must be issued first");
         }
         final boolean isAck = spController.waitForAck();
-        isAckOutstanding = false;
+        isAckRequestOutstanding = false;
         // At every ack receipt, we want to retrieve the stdout/stderr output in case we're journaling
         final ProcessOutput po = getAccumulatedOutput();
         // if the ack was negative, throw, since the ack queue is no longer reliably in sync
@@ -217,10 +216,11 @@ public class StreamingPythonScriptExecutor extends PythonExecutorBase {
     }
 
     /**
-     *
-     * @param itemSerializer
-     * @param <T>
-     * @return
+     * Obtain a stream writer that serializes and writes batches of items of type {@code T} on a background thread.
+     * @param itemSerializer {@code Function} that  accepts items of type {@code T} and converts them to a
+     *                                       {@code ByteArrayOutputStream} that is subsequently written to the stream
+     * @param <T> The type of items to be serialized and written.
+     * @return An {@link AsynchronousStreamWriter}
      */
     public <T> AsynchronousStreamWriter<T> getStreamWriter(final Function<T, ByteArrayOutputStream> itemSerializer) {
         Utils.nonNull(itemSerializer, "An item serializer must be provided for the async writer service");
@@ -281,7 +281,7 @@ public class StreamingPythonScriptExecutor extends PythonExecutorBase {
      * indirectly through {@link #sendSynchronousCommand}.
      *
      * Note that the output returned is somewhat non-deterministic, in that there is no guaranty that all of
-     * the output from th prevous command has been flushed at the time this call is made.
+     * the output from the previous command has been flushed at the time this call is made.
      *
      * @return ProcessOutput containing all accumulated output from stdout/stderr
      * @throws UserException if a timeout occurs waiting for output
@@ -303,11 +303,12 @@ public class StreamingPythonScriptExecutor extends PythonExecutorBase {
     }
 
     private void sendAckRequest() {
-        if (isAckOutstanding) {
-            throw new PythonScriptExecutorException("An ack request was made before a previously requested ack was retrieved");
+        if (isAckRequestOutstanding) {
+            throw new GATKException("An ack request is already outstanding. The previous ack request must be retrieved" +
+                    " before a new ack request can be issued");
         }
         spController.writeProcessInput(PYTHON_SEND_ACK_REQUEST);
-        isAckOutstanding = true;
+        isAckRequestOutstanding = true;
     }
 
 }

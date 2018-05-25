@@ -62,7 +62,7 @@ public class ExampleStreamingPythonExecutor extends ReadWalker {
     @Override
     public void onTraversalStart() {
 
-        // Start the Python process, and get a strream writer from the executor to use to send data to Python.
+        // Start the Python process, and get a stream writer from the executor to use to send data to Python.
         pythonExecutor.start(Collections.emptyList());
         asyncStreamWriter = pythonExecutor.getStreamWriter(AsynchronousStreamWriter.stringSerializer);
 

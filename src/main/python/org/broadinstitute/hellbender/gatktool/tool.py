@@ -70,7 +70,8 @@ def terminateGATK():
     Called by GATK when no more Python commands will be executed
     """
     global _ackFIFO
-    assert _ackFIFO != None
+    if _ackFIFO is None:
+        raise RuntimeError("ack FIFO has not been initialized")
     _ackFIFO.close()
     _ackFIFO = None
 
@@ -92,7 +93,8 @@ def closeDataFIFO():
     data FIFO can no longer be read.
     """
     global _dataFIFO
-    assert _dataFIFO != None
+    if _dataFIFO is None:
+        raise RuntimeError("data FIFO has not been initialized")
     _dataFIFO.close()
     _dataFIFO = None
 
@@ -124,7 +126,8 @@ class AckFIFO:
         """
         Write a positive acknowledgement to the ACK FIFO.
         """
-        assert self.fileWriter != None
+        if self.fileWriter is None:
+            raise RuntimeError("ack FIFO has not been initialized")
         self.fileWriter.write(AckFIFO._ackString)
         self.fileWriter.flush()
 
@@ -135,7 +138,8 @@ class AckFIFO:
         Calling this method will result in an exception being thrown
         in the GATK tool on whos behalf this module is running.
         """
-        assert self.fileWriter != None
+        if self.fileWriter is None:
+            raise RuntimeError("ack FIFO has not been initialized")
         self.fileWriter.write(AckFIFO._nackString)
         self.fileWriter.flush()
 
@@ -152,7 +156,6 @@ class DataFIFO:
 
     The FIFO is written by GATK and read by Python.
     """
-    # TODO: Need a way to provide a per-line deserializer
     def __init__(self, dataFIFOName: str) -> None:
         """Open the data stream fifo for reading"""
         self.dataFIFOName = dataFIFOName
@@ -166,10 +169,12 @@ class DataFIFO:
         Read a single line from the Data FIFO.
         :return: string
         """
-        assert self.fileReader != None
+        if self.fileReader is None:
+            raise RuntimeError("data FIFO reader has not been initialized")
         return self.fileReader.readline()
 
     def close(self):
-        assert self.fileReader != None
+        if self.fileReader is None:
+            raise RuntimeError("data FIFO reader has not been initialized")
         self.fileReader.close()
         self.fileReader = None

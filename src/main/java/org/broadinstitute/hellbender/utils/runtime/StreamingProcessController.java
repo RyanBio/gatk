@@ -28,6 +28,8 @@ public final class StreamingProcessController extends ProcessControllerBase<Capt
 
     private final ProcessSettings settings;
 
+    // Names for the ack and data fifo files used by this controller. Each controller instance creates a
+    // unique temporary directory for these files, so the names don't have to be unique across instances.
     private static String ACK_FIFO_FILE_NAME = "gatkStreamingControllerAck.fifo";
     private static String DATA_FIFO_FILE_NAME = "gatkStreamingControllerData.fifo";
 
@@ -197,7 +199,7 @@ public final class StreamingProcessController extends ProcessControllerBase<Capt
 
     /**
      * Wait for a previously requested acknowledgement to be received. The remote process can deliver a positive
-     * ack to indicate successfull command completion, or negative to indicate command execution failure.
+     * ack to indicate successful command completion, or a negative ack to indicate command execution failure.
      * @return true if an positive acknowledgement (ACK) was received, false if a negative acknowledgement (NCK)
      * was received
      */
@@ -247,7 +249,7 @@ public final class StreamingProcessController extends ProcessControllerBase<Capt
         if (dataFIFOFile != null) {
             throw new IllegalArgumentException("Only one data FIFO per controller is supported");
         }
-        dataFIFOFile = createFIFOFile(DATA_FIFO_FILE_NAME);;
+        dataFIFOFile = createFIFOFile(DATA_FIFO_FILE_NAME);
         return dataFIFOFile;
     }
 
@@ -397,7 +399,7 @@ public final class StreamingProcessController extends ProcessControllerBase<Capt
                 journalingFileWriter.write("Initial process command line: ");
                 journalingFileWriter.write(settings.getCommandString() + "\n\n");
             } catch (IOException e) {
-                throw new GATKException(String.format("Error creating straeming process journaling file %s for command \"%s\"",
+                throw new GATKException(String.format("Error creating streaming process journaling file %s for command \"%s\"",
                         commandString,
                         journalingFile.getAbsolutePath()), e);
             }
@@ -423,8 +425,8 @@ public final class StreamingProcessController extends ProcessControllerBase<Capt
 
         /**
          * Record inbound data being received from a remote process.
-         * @param stdout Data receieved from stdout.
-         * @param stderr Data receieved from stderr.
+         * @param stdout Data received from stdout.
+         * @param stderr Data received from stderr.
          */
         public void writeInbound(final StreamOutput stdout, final StreamOutput stderr) {
 

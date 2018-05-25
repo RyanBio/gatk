@@ -2,12 +2,14 @@ package org.broadinstitute.hellbender.utils.runtime;
 
 import org.broadinstitute.hellbender.utils.test.BaseTest;
 import org.testng.Assert;
+import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
 import java.io.File;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Arrays;
 
 // Tests for the StreamingProcessController. Although these tests use Python, they do not test
 // or depend on the gatktool python package.
@@ -20,20 +22,38 @@ import java.io.IOException;
 public class StreamingProcessControllerUnitTest extends BaseTest {
     private final static String NL = System.lineSeparator();
 
-    @Test(groups = "python", timeOut = 10000)
-    public void testSerialCommands() throws IOException {
+    @DataProvider(name="serialPythonCommands")
+    private Object[][] getSerialPythonCommands() {
+        return new Object[][] {
+                { new String[]{ "x = 37", "x = x + 2"},
+                        "str(x)",
+                        "39" },
+                { new String[]{ "bases = ['a', 'c', 'g', 't']", "bases.append('n')", "bases.sort()"},
+                        "bases[3]",
+                        "n" },
+                { new String[]{
+                        "stack = [1, 2, 3]", "stack.append(4)", "stack.append(5)", "stack.pop()", "stack.pop()", "stack.pop()", "stack.pop()",
+                        "a = stack.pop()"},
+                        "str(a)", "1" }
+        };
+    }
+
+    @Test(dataProvider="serialPythonCommands", groups = "python", timeOut = 10000)
+    public void testSerialCommands(
+            final String[] serialPythonCommands,
+            final String pythonExpression,
+            final String expectedResultLine) throws IOException {
         final StreamingProcessController controller = initializePythonControllerWithAckFIFO(false);
 
-        controller.writeProcessInput("x = 37" + NL);
-        controller.writeProcessInput("x = x + 2" + NL);
+        Arrays.stream(serialPythonCommands).forEach(command -> controller.writeProcessInput(command + NL));
 
         boolean ack = requestAndWaitForAck(controller);
         Assert.assertTrue(ack);
 
-        final File tempFile = writePythonExpressionToTempFile(controller, "str(x)");
+        final File tempFile = writePythonExpressionToTempFile(controller, pythonExpression);
 
         final String actualOutput = getLineFromTempFile(tempFile);
-        Assert.assertEquals(actualOutput, "39");
+        Assert.assertEquals(actualOutput, expectedResultLine);
 
         terminatePythonController(controller);
         Assert.assertFalse(controller.getProcess().isAlive());

@@ -29,24 +29,4 @@ public final class ProcessOutput {
     public StreamOutput getStderr() {
         return stderr;
     }
-
-    public String toString() {
-        final StringBuilder sb = new StringBuilder();
-        sb.append("[Process Output]:\n");
-        if (stdout != null) {
-            if (stdout.getBufferString() != null) {
-                sb.append("[Stdout: ");
-                sb.append(stdout.getBufferString());
-                sb.append("---]\n");
-            }
-        }
-        if (stderr != null) {
-            if (stderr.getBufferString() != null) {
-                sb.append("[Stderr: ");
-                sb.append(stderr.getBufferString());
-                sb.append("---]\n");
-            }
-        }
-        return sb.toString();
-    }
 }

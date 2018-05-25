@@ -93,7 +93,7 @@ public class AsynchronousStreamWriter<T> {
                 }
                 streamWriter.flush();
             } catch (IOException e) {
-                throw new GATKException("IOException waiting for asynchrnous batch completion", e);
+                throw new GATKException("IOException waiting for asynchronous batch completion", e);
             }
             previousBatch = null;
         }
