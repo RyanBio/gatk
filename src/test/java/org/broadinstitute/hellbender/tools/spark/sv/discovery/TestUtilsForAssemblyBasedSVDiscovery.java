@@ -1,27 +1,29 @@
 package org.broadinstitute.hellbender.tools.spark.sv.discovery;
 
-import htsjdk.samtools.Cigar;
-import htsjdk.samtools.SAMFlag;
-import htsjdk.samtools.SAMSequenceDictionary;
-import htsjdk.samtools.TextCigarCodec;
+import htsjdk.samtools.*;
 import htsjdk.samtools.util.SequenceUtil;
 import org.broadinstitute.hellbender.GATKBaseTest;
 import org.broadinstitute.hellbender.engine.datasources.ReferenceMultiSource;
 import org.broadinstitute.hellbender.engine.datasources.ReferenceWindowFunctions;
-import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AlignedContig;
-import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AlignmentInterval;
-import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.ContigAlignmentsModifier;
+import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.*;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SvCigarUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
+import org.broadinstitute.hellbender.utils.io.IOUtils;
 import org.broadinstitute.hellbender.utils.read.CigarUtils;
+import scala.Tuple2;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.broadinstitute.hellbender.tools.spark.sv.discovery.SvDiscoveryUtils.getCanonicalChromosomes;
+import static org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AssemblyContigAlignmentsConfigPicker.*;
 
-public final class SVDiscoveryTestUtilsAndCommonDataProvider {
+public final class TestUtilsForAssemblyBasedSVDiscovery {
 
-    // data block ======================================================================================================
     public static final ReferenceMultiSource b37_reference_20_21 = new ReferenceMultiSource(
             GATKBaseTest.b37_reference_20_21, ReferenceWindowFunctions.IDENTITY_FUNCTION);
     public static final SAMSequenceDictionary b37_seqDict_20_21 = b37_reference_20_21.getReferenceSequenceDictionary(null);
@@ -31,7 +33,28 @@ public final class SVDiscoveryTestUtilsAndCommonDataProvider {
     public static final SAMSequenceDictionary b38_seqDict_chr20_chr21 = b38_reference_chr20_chr21.getReferenceSequenceDictionary(null);
     public static final Set<String> b38_canonicalChromosomes = getCanonicalChromosomes(null, b38_seqDict_chr20_chr21);
 
-    // utils block =====================================================================================================
+    /**
+     * We are having this because it is SV, especially complex ones, are rare and events on chr20 and 21 are not enough.
+     */
+    public final static Set<String> hg38CanonicalChromosomes;
+
+    public final static SAMSequenceDictionary bareBoneHg38SAMSeqDict;
+    static {
+        final List<SAMSequenceRecord> hg38Chromosomes = new ArrayList<>();
+        final String hg38ChrBareBoneListFile =  GATKBaseTest.toolsTestDir + "/spark/sv/utils/hg38ChrBareBone.txt";
+        try (final Stream<String> records = Files.lines(IOUtils.getPath(( hg38ChrBareBoneListFile )))) {
+            records.forEach(line -> {
+                final String[] fields = line.split("\t", 2);
+                hg38Chromosomes.add(new SAMSequenceRecord(fields[0], Integer.valueOf(fields[1])));
+            });
+            bareBoneHg38SAMSeqDict = new SAMSequenceDictionary(hg38Chromosomes);
+        } catch ( final IOException ioe ) {
+            throw new UserException("Can't read nonCanonicalContigNamesFile file " + hg38ChrBareBoneListFile, ioe);
+        }
+
+        hg38CanonicalChromosomes =
+                hg38Chromosomes.subList(0, 24).stream().map(SAMSequenceRecord::getSequenceName).collect(Collectors.toCollection(LinkedHashSet::new));
+    }
 
     public static byte[] getReverseComplimentCopy(final byte[] sequence) {
         final byte[] sequenceCopy = Arrays.copyOf(sequence, sequence.length);
@@ -99,4 +122,15 @@ public final class SVDiscoveryTestUtilsAndCommonDataProvider {
         }
     }
 
+    public static AssemblyContigWithFineTunedAlignments makeContigAnalysisReady(final String primarySAMRecord,
+                                                                                final Set<String> canonicalChromosomes) {
+        final AlignedContig alignedContig = fromPrimarySAMRecordString(primarySAMRecord, true);
+
+        return
+                AssemblyContigAlignmentsConfigPicker.reConstructContigFromPickedConfiguration(
+                        new Tuple2<>(new Tuple2<>(alignedContig.getContigName(), alignedContig.getContigSequence()),
+                                AssemblyContigAlignmentsConfigPicker.pickBestConfigurations(alignedContig, canonicalChromosomes,
+                                        0.0)))
+                        .next();
+    }
 }

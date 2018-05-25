@@ -13,8 +13,7 @@ import org.broadinstitute.hellbender.GATKBaseTest;
 import org.broadinstitute.hellbender.engine.datasources.ReferenceMultiSource;
 import org.broadinstitute.hellbender.engine.spark.SparkContextFactory;
 import org.broadinstitute.hellbender.tools.spark.sv.StructuralVariationDiscoveryArgumentCollection;
-import org.broadinstitute.hellbender.tools.spark.sv.discovery.inference.NovelAdjacencyAndAltHaplotype;
-import org.broadinstitute.hellbender.tools.spark.sv.discovery.inference.SimpleChimera;
+import org.broadinstitute.hellbender.tools.spark.sv.discovery.inference.*;
 import org.broadinstitute.hellbender.tools.spark.sv.evidence.EvidenceTargetLink;
 import org.broadinstitute.hellbender.tools.spark.sv.evidence.ReadMetadata;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.PairedStrandedIntervalTree;
@@ -34,7 +33,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.broadinstitute.hellbender.tools.spark.sv.discovery.SimpleSVDiscoveryTestDataProvider.*;
-import static org.broadinstitute.hellbender.tools.spark.sv.discovery.SimpleSVType.SupportedType.DEL;
 import static org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AssemblyContigWithFineTunedAlignments.NO_GOOD_MAPPING_TO_NON_CANONICAL_CHROMOSOME;
 import static org.broadinstitute.hellbender.tools.spark.sv.utils.GATKSVVCFConstants.*;
 import static org.mockito.Mockito.when;
@@ -61,14 +59,14 @@ public class AnnotatedVariantProducerUnitTest extends GATKBaseTest {
      * MAPPING_QUALITIES, ALIGNMENT_LENGTH
      */
     @Test(groups = "sv", dataProvider = "forEvidenceAnnotation")
-    public void testEvidenceAnnotation(final TestDataForSimpleSVs testData,
+    public void testEvidenceAnnotation(final AssemblyBasedSVDiscoveryTestDataProvider.AssemblyBasedSVDiscoveryTestDataForSimpleChimera testData,
                                        final String[] expectedMappingQualitiesAsStrings,
                                        final String[] expectedAlignmentLengthsAsStrings) {
 
         final List<SimpleChimera> chimericAlignments =
                 Collections.singletonList( new SimpleChimera(testData.firstAlignment, testData.secondAlignment,
                         Collections.emptyList(), testData.evidenceAssemblyContigName, NO_GOOD_MAPPING_TO_NON_CANONICAL_CHROMOSOME,
-                        SVDiscoveryTestUtilsAndCommonDataProvider.b37_seqDict_20_21));
+                        TestUtilsForAssemblyBasedSVDiscovery.b37_seqDict_20_21));
         final Map<String, Object> attributeMap =
                 AnnotatedVariantProducer.getEvidenceRelatedAnnotations(chimericAlignments);
 
@@ -131,17 +129,17 @@ public class AnnotatedVariantProducerUnitTest extends GATKBaseTest {
     // Integrative test
     // -----------------------------------------------------------------------------------------------
     @Test(groups = "sv", dataProvider = "forIntegrativeTest")
-    public void testIntegrative(final TestDataForSimpleSVs testData,
+    public void testIntegrative(final AssemblyBasedSVDiscoveryTestDataProvider.AssemblyBasedSVDiscoveryTestDataForSimpleChimera testData,
                                 final List<String> expectedAttributeKeys,
                                 final Broadcast<SVIntervalTree<VariantContext>> broadcastCNVCalls,
                                 final Broadcast<ReferenceMultiSource> referenceBroadcast,
                                 final Broadcast<SAMSequenceDictionary> refSeqDictBroadcast) throws IOException {
 
-        final NovelAdjacencyAndAltHaplotype breakpoints = testData.biPathBubble;
+        final NovelAdjacencyAndAltHaplotype breakpoints = testData.manuallyCuratedBiPathBubble;
         final List<SimpleChimera> evidence =
                 Collections.singletonList(new SimpleChimera(testData.firstAlignment, testData.secondAlignment,
                         Collections.emptyList(), testData.evidenceAssemblyContigName, NO_GOOD_MAPPING_TO_NON_CANONICAL_CHROMOSOME,
-                                SVDiscoveryTestUtilsAndCommonDataProvider.b37_seqDict_20_21));
+                                TestUtilsForAssemblyBasedSVDiscovery.b37_seqDict_20_21));
         final String sampleID = "testSample";
 
         final VariantContext variantContext =
@@ -162,8 +160,8 @@ public class AnnotatedVariantProducerUnitTest extends GATKBaseTest {
         final List<Object[]> data = new ArrayList<>(20);
 
         final JavaSparkContext testSparkContext = SparkContextFactory.getTestSparkContext();
-        final Broadcast<ReferenceMultiSource> referenceBroadcast = testSparkContext.broadcast(SVDiscoveryTestUtilsAndCommonDataProvider.b37_reference_20_21);
-        final Broadcast<SAMSequenceDictionary> refSeqDictBroadcast = testSparkContext.broadcast(SVDiscoveryTestUtilsAndCommonDataProvider.b37_seqDict_20_21);
+        final Broadcast<ReferenceMultiSource> referenceBroadcast = testSparkContext.broadcast(TestUtilsForAssemblyBasedSVDiscovery.b37_reference_20_21);
+        final Broadcast<SAMSequenceDictionary> refSeqDictBroadcast = testSparkContext.broadcast(TestUtilsForAssemblyBasedSVDiscovery.b37_seqDict_20_21);
 
         final Broadcast<SVIntervalTree<VariantContext>> broadcastCNVCalls = null;
 
@@ -276,7 +274,7 @@ public class AnnotatedVariantProducerUnitTest extends GATKBaseTest {
                 .chr("20").start(200).stop(300)
                 .alleles("N", SimpleSVType.ImpreciseDeletion.createBracketedSymbAlleleString(SYMB_ALT_ALLELE_DEL))
                 .attribute(VCFConstants.END_KEY, 300)
-                .attribute(SVTYPE, DEL.toString())
+                .attribute(SVTYPE, SimpleSVType.SupportedType.DEL.toString())
                 .make();
 
         final VariantContext annotatedVC = new VariantContextBuilder()
@@ -284,7 +282,7 @@ public class AnnotatedVariantProducerUnitTest extends GATKBaseTest {
                 .chr("20").start(200).stop(300)
                 .alleles("N", SimpleSVType.ImpreciseDeletion.createBracketedSymbAlleleString(SYMB_ALT_ALLELE_DEL))
                 .attribute(VCFConstants.END_KEY, 300)
-                .attribute(SVTYPE, DEL.toString())
+                .attribute(SVTYPE, SimpleSVType.SupportedType.DEL.toString())
                 .attribute(READ_PAIR_SUPPORT, 7)
                 .attribute(SPLIT_READ_SUPPORT, 5)
                 .make();
@@ -343,7 +341,7 @@ public class AnnotatedVariantProducerUnitTest extends GATKBaseTest {
 
         final List<VariantContext> processedVariantContexts =
                 AnnotatedVariantProducer.annotateBreakpointBasedCallsWithImpreciseEvidenceLinks(inputVariants,
-                        evidenceTree, metadata, SVDiscoveryTestUtilsAndCommonDataProvider.b37_reference_20_21, params, localLogger);
+                        evidenceTree, metadata, TestUtilsForAssemblyBasedSVDiscovery.b37_reference_20_21, params, localLogger);
 
         VariantContextTestUtils.assertEqualVariants(processedVariantContexts, expectedVariants);
     }

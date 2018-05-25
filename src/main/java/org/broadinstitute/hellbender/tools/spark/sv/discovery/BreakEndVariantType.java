@@ -22,7 +22,7 @@ import static org.broadinstitute.hellbender.tools.spark.sv.utils.GATKSVVCFConsta
 public abstract class BreakEndVariantType extends SvType {
 
     // TODO: 5/25/18 this class is to be expanded to support the following types
-    enum SupportedType {
+    public enum SupportedType {
         INTRA_CHR_STRAND_SWITCH_55,// intra-chromosome strand-switch novel adjacency, alignments left-flanking the novel adjacency
         INTRA_CHR_STRAND_SWITCH_33,// intra-chromosome strand-switch novel adjacency, alignments right-flanking the novel adjacency
 
