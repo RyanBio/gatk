@@ -32,7 +32,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.broadinstitute.hellbender.tools.spark.sv.discovery.SimpleSVDiscoveryTestDataProvider.*;
+import static org.broadinstitute.hellbender.tools.spark.sv.discovery.inference.AssemblyBasedSVDiscoveryTestDataProviderForInversionBreakpoints.forSimpleInversionFromLongCtg1WithStrangeLeftBreakpoint;
+import static org.broadinstitute.hellbender.tools.spark.sv.discovery.inference.AssemblyBasedSVDiscoveryTestDataProviderForSimpleSV.*;
 import static org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AssemblyContigWithFineTunedAlignments.NO_GOOD_MAPPING_TO_NON_CANONICAL_CHROMOSOME;
 import static org.broadinstitute.hellbender.tools.spark.sv.utils.GATKSVVCFConstants.*;
 import static org.mockito.Mockito.when;
@@ -45,8 +46,8 @@ public class AnnotatedVariantProducerUnitTest extends GATKBaseTest {
      */
     @BeforeClass
     private void makeSureDataIsAvailable() {
-        if(!SimpleSVDiscoveryTestDataProvider.testDataInitialized) {
-            new SimpleSVDiscoveryTestDataProvider();
+        if(!AssemblyBasedSVDiscoveryTestDataProviderForSimpleSV.testDataInitialized) {
+            new AssemblyBasedSVDiscoveryTestDataProviderForSimpleSV();
         }
     }
 
@@ -66,7 +67,7 @@ public class AnnotatedVariantProducerUnitTest extends GATKBaseTest {
         final List<SimpleChimera> chimericAlignments =
                 Collections.singletonList( new SimpleChimera(testData.firstAlignment, testData.secondAlignment,
                         Collections.emptyList(), testData.evidenceAssemblyContigName, NO_GOOD_MAPPING_TO_NON_CANONICAL_CHROMOSOME,
-                        TestUtilsForAssemblyBasedSVDiscovery.b37_seqDict_20_21));
+                        TestUtilsForAssemblyBasedSVDiscovery.b37_seqDict));
         final Map<String, Object> attributeMap =
                 AnnotatedVariantProducer.getEvidenceRelatedAnnotations(chimericAlignments);
 
@@ -139,7 +140,7 @@ public class AnnotatedVariantProducerUnitTest extends GATKBaseTest {
         final List<SimpleChimera> evidence =
                 Collections.singletonList(new SimpleChimera(testData.firstAlignment, testData.secondAlignment,
                         Collections.emptyList(), testData.evidenceAssemblyContigName, NO_GOOD_MAPPING_TO_NON_CANONICAL_CHROMOSOME,
-                                TestUtilsForAssemblyBasedSVDiscovery.b37_seqDict_20_21));
+                                TestUtilsForAssemblyBasedSVDiscovery.b37_seqDict));
         final String sampleID = "testSample";
 
         final VariantContext variantContext =
@@ -160,8 +161,8 @@ public class AnnotatedVariantProducerUnitTest extends GATKBaseTest {
         final List<Object[]> data = new ArrayList<>(20);
 
         final JavaSparkContext testSparkContext = SparkContextFactory.getTestSparkContext();
-        final Broadcast<ReferenceMultiSource> referenceBroadcast = testSparkContext.broadcast(TestUtilsForAssemblyBasedSVDiscovery.b37_reference_20_21);
-        final Broadcast<SAMSequenceDictionary> refSeqDictBroadcast = testSparkContext.broadcast(TestUtilsForAssemblyBasedSVDiscovery.b37_seqDict_20_21);
+        final Broadcast<ReferenceMultiSource> referenceBroadcast = testSparkContext.broadcast(TestUtilsForAssemblyBasedSVDiscovery.b37_reference);
+        final Broadcast<SAMSequenceDictionary> refSeqDictBroadcast = testSparkContext.broadcast(TestUtilsForAssemblyBasedSVDiscovery.b37_seqDict);
 
         final Broadcast<SVIntervalTree<VariantContext>> broadcastCNVCalls = null;
 
@@ -341,7 +342,7 @@ public class AnnotatedVariantProducerUnitTest extends GATKBaseTest {
 
         final List<VariantContext> processedVariantContexts =
                 AnnotatedVariantProducer.annotateBreakpointBasedCallsWithImpreciseEvidenceLinks(inputVariants,
-                        evidenceTree, metadata, TestUtilsForAssemblyBasedSVDiscovery.b37_reference_20_21, params, localLogger);
+                        evidenceTree, metadata, TestUtilsForAssemblyBasedSVDiscovery.b37_reference, params, localLogger);
 
         VariantContextTestUtils.assertEqualVariants(processedVariantContexts, expectedVariants);
     }

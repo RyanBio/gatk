@@ -20,14 +20,13 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.broadinstitute.hellbender.tools.spark.sv.discovery.SvDiscoveryUtils.getCanonicalChromosomes;
-import static org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AssemblyContigAlignmentsConfigPicker.*;
 
 public final class TestUtilsForAssemblyBasedSVDiscovery {
 
-    public static final ReferenceMultiSource b37_reference_20_21 = new ReferenceMultiSource(
+    public static final ReferenceMultiSource b37_reference = new ReferenceMultiSource(
             GATKBaseTest.b37_reference_20_21, ReferenceWindowFunctions.IDENTITY_FUNCTION);
-    public static final SAMSequenceDictionary b37_seqDict_20_21 = b37_reference_20_21.getReferenceSequenceDictionary(null);
-    public static final Set<String> b37_canonicalChromosomes = getCanonicalChromosomes(null, b37_seqDict_20_21);
+    public static final SAMSequenceDictionary b37_seqDict = b37_reference.getReferenceSequenceDictionary(null);
+    public static final Set<String> b37_canonicalChromosomes = getCanonicalChromosomes(null, b37_seqDict);
     public static final ReferenceMultiSource b38_reference_chr20_chr21 = new ReferenceMultiSource(
             GATKBaseTest.b38_reference_20_21, ReferenceWindowFunctions.IDENTITY_FUNCTION);
     public static final SAMSequenceDictionary b38_seqDict_chr20_chr21 = b38_reference_chr20_chr21.getReferenceSequenceDictionary(null);

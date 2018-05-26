@@ -7,6 +7,7 @@ import org.broadinstitute.hellbender.engine.datasources.ReferenceMultiSource;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.StrandSwitch;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.inference.NovelAdjacencyAndAltHaplotype;
+import org.broadinstitute.hellbender.tools.spark.sv.discovery.inference.TypeInferredFromSimpleChimera;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVContext;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import scala.Tuple2;
@@ -66,7 +67,7 @@ public abstract class BreakEndVariantType extends SvType {
         }
     }
 
-    enum SupportedType {
+    public enum SupportedType {
         INTRA_CHR_STRAND_SWITCH_55,// intra-chromosome strand-switch novel adjacency, alignments left-flanking the novel adjacency
         INTRA_CHR_STRAND_SWITCH_33,// intra-chromosome strand-switch novel adjacency, alignments right-flanking the novel adjacency
 
@@ -223,9 +224,11 @@ public abstract class BreakEndVariantType extends SvType {
             final String insertedSequence = extractInsertedSequence(narl, forUpstreamLoc);
             final SimpleInterval novelAdjRefLoc = forUpstreamLoc ? narl.getLeftJustifiedRightRefLoc() : narl.getLeftJustifiedLeftRefLoc();
 
-            final boolean upstreamLocIsFirstInPartner; // see Fig.5 of Section 5.4 of spec Version 4.2 (the green pairs)
+            // see Fig.5 of Section 5.4 of spec Version 4.2 (the green pairs)
+            final boolean upstreamLocIsFirstInPartner =
+                    narl.getTypeInferredFromSimpleChimera().equals(TypeInferredFromSimpleChimera.INTER_CHR_NO_SS_WITH_LEFT_MATE_FIRST_IN_PARTNER);
             if (narl.getStrandSwitch().equals(StrandSwitch.NO_SWITCH)) {
-                if (forUpstreamLoc) {
+                if (forUpstreamLoc == upstreamLocIsFirstInPartner) {
                     return Allele.create(refBase + insertedSequence + "[" + novelAdjRefLoc.toString() + "[");
                 } else {
                     return Allele.create("]" + novelAdjRefLoc + "]" + insertedSequence + refBase);

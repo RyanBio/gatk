@@ -3,8 +3,6 @@ package org.broadinstitute.hellbender.tools.spark.sv.discovery.inference;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import org.broadinstitute.hellbender.GATKBaseTest;
-import org.broadinstitute.hellbender.tools.spark.sv.discovery.SimpleSVDiscoveryTestDataProvider;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.TestUtilsForAssemblyBasedSVDiscovery;
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
@@ -21,23 +19,22 @@ import java.util.List;
 
 import static org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AssemblyContigWithFineTunedAlignments.NO_GOOD_MAPPING_TO_NON_CANONICAL_CHROMOSOME;
 
-public class SimpleNovelAdjacencyAndSimpleChimeraEvidenceUnitTest extends GATKBaseTest {
+public class SimpleNovelAdjacencyAndSimpleChimeraEvidenceUnitTest extends AssemblyBasedSVDiscoveryBaseTest {
 
 
     @DataProvider(name = "forKryoSerializationAndHashCode")
     private Object[][] forKryoSerializationAndHashCode() {
         final List<Object[]> data = new ArrayList<>();
 
-        for (final Tuple2<SimpleSVDiscoveryTestDataProvider.TestDataForSimpleSVs, SimpleSVDiscoveryTestDataProvider.TestDataForSimpleSVs>
-                pair :
-                SimpleSVDiscoveryTestDataProvider.getAllTestDataPaired()) {
-            final NovelAdjacencyAndAltHaplotype biPathBubble = pair._1.biPathBubble;
+        for (final Tuple2<? extends AssemblyBasedSVDiscoveryTestDataProvider.AssemblyBasedSVDiscoveryTestDataForSimpleChimera, ? extends AssemblyBasedSVDiscoveryTestDataProvider.AssemblyBasedSVDiscoveryTestDataForSimpleChimera>
+                pair : baseDataProviderInPairs()) {
+            final NovelAdjacencyAndAltHaplotype biPathBubble = pair._1.manuallyCuratedBiPathBubble;
             final SimpleChimera forwardRep = new SimpleChimera(pair._1.firstAlignment, pair._1.secondAlignment, Collections.emptyList(),
                     pair._1.evidenceAssemblyContigName, NO_GOOD_MAPPING_TO_NON_CANONICAL_CHROMOSOME,
-                    TestUtilsForAssemblyBasedSVDiscovery.b37_seqDict_20_21);
+                    TestUtilsForAssemblyBasedSVDiscovery.b37_seqDict);
             final SimpleChimera reverseRep = new SimpleChimera(pair._2.firstAlignment, pair._2.secondAlignment, Collections.emptyList(),
                     pair._2.evidenceAssemblyContigName, NO_GOOD_MAPPING_TO_NON_CANONICAL_CHROMOSOME,
-                    TestUtilsForAssemblyBasedSVDiscovery.b37_seqDict_20_21);
+                    TestUtilsForAssemblyBasedSVDiscovery.b37_seqDict);
             final List<SimpleChimera> evidence = Arrays.asList(forwardRep, reverseRep);
             data.add(new Object[]{new SimpleNovelAdjacencyAndChimericAlignmentEvidence(biPathBubble, evidence)});
         }

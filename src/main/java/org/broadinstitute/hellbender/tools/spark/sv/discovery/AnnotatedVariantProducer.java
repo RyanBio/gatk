@@ -2,6 +2,7 @@ package org.broadinstitute.hellbender.tools.spark.sv.discovery;
 
 import com.google.common.annotations.VisibleForTesting;
 import htsjdk.samtools.SAMSequenceDictionary;
+import htsjdk.samtools.util.StringUtil;
 import htsjdk.variant.variantcontext.Allele;
 import htsjdk.variant.variantcontext.StructuralVariantType;
 import htsjdk.variant.variantcontext.VariantContext;
@@ -127,7 +128,7 @@ public class AnnotatedVariantProducer implements Serializable {
 
         final byte[] altHaplotypeSequence = novelAdjacencyAndAltHaplotype.getAltHaplotypeSequence();
         if (altHaplotypeSequence != null && altHaplotypeSequence.length != 0)
-            vcBuilder.attribute(GATKSVVCFConstants.SEQ_ALT_HAPLOTYPE, new String(altHaplotypeSequence));
+            vcBuilder.attribute(GATKSVVCFConstants.SEQ_ALT_HAPLOTYPE, StringUtil.bytesToString(altHaplotypeSequence));
 
         if (broadcastCNVCalls != null && (! variantIsBND) ) {
             final String cnvCallAnnotation = getExternalCNVCallAnnotation(refLoc, applicableStop, broadcastSequenceDictionary, broadcastCNVCalls, sampleId);

@@ -1,6 +1,9 @@
 package org.broadinstitute.hellbender.tools.spark.sv.discovery.inference;
 
-enum TypeInferredFromSimpleChimera {
+import com.google.common.annotations.VisibleForTesting;
+
+@VisibleForTesting
+public enum TypeInferredFromSimpleChimera {
     SIMPLE_DEL,             // simple deletion
     DEL_DUP_CONTRACTION,    // deletion from duplication contraction
     SIMPLE_INS,             // simple insertion

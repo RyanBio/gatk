@@ -186,7 +186,7 @@ public class NovelAdjacencyAndAltHaplotype {
         return complication;
     }
 
-    TypeInferredFromSimpleChimera getType() {
+    public TypeInferredFromSimpleChimera getTypeInferredFromSimpleChimera() {
         return type;
     }
 
