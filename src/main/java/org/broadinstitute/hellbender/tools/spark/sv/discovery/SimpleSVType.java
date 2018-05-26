@@ -3,10 +3,12 @@ package org.broadinstitute.hellbender.tools.spark.sv.discovery;
 import com.google.common.annotations.VisibleForTesting;
 import htsjdk.variant.variantcontext.Allele;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.StrandSwitch;
+import org.broadinstitute.hellbender.tools.spark.sv.discovery.inference.BreakpointComplications;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.inference.NovelAdjacencyAndAltHaplotype;
 import org.broadinstitute.hellbender.tools.spark.sv.evidence.EvidenceTargetLink;
 import org.broadinstitute.hellbender.tools.spark.sv.evidence.ReadMetadata;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.GATKSVVCFConstants;
+import org.broadinstitute.hellbender.utils.SimpleInterval;
 
 import java.util.Collections;
 import java.util.Map;
@@ -51,7 +53,7 @@ public abstract class SimpleSVType extends SvType {
             final StrandSwitch strandSwitch = novelAdjacencyAndAltHaplotype.getStrandSwitch();
 
             return (strandSwitch.equals(StrandSwitch.FORWARD_TO_REVERSE) ? GATKSVVCFConstants.INV55 : GATKSVVCFConstants.INV33) + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR +
-                    contig + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR + start + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR + end;
+                    makeLocationPartOfID(novelAdjacencyAndAltHaplotype);
         }
     }
 
@@ -79,9 +81,7 @@ public abstract class SimpleSVType extends SvType {
 
             return  ((novelAdjacencyAndAltHaplotype.hasDuplicationAnnotation()) ? GATKSVVCFConstants.DUP_TAN_CONTRACTION_INTERNAL_ID_START_STRING : SupportedType.DEL.name())
                     + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
-                    + novelAdjacencyAndAltHaplotype.getLeftJustifiedLeftRefLoc().getContig() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
-                    + novelAdjacencyAndAltHaplotype.getLeftJustifiedLeftRefLoc().getEnd() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
-                    + novelAdjacencyAndAltHaplotype.getLeftJustifiedRightRefLoc().getStart();
+                    + makeLocationPartOfID(novelAdjacencyAndAltHaplotype);
         }
     }
 
@@ -108,9 +108,7 @@ public abstract class SimpleSVType extends SvType {
         private static String getIDString(final NovelAdjacencyAndAltHaplotype novelAdjacencyAndAltHaplotype) {
 
             return SupportedType.INS.name() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
-                    + novelAdjacencyAndAltHaplotype.getLeftJustifiedLeftRefLoc().getContig() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
-                    + novelAdjacencyAndAltHaplotype.getLeftJustifiedLeftRefLoc().getEnd() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
-                    + novelAdjacencyAndAltHaplotype.getLeftJustifiedRightRefLoc().getStart();
+                    + makeLocationPartOfID(novelAdjacencyAndAltHaplotype);
         }
     }
 
@@ -136,10 +134,12 @@ public abstract class SimpleSVType extends SvType {
 
         private static String getIDString(final NovelAdjacencyAndAltHaplotype novelAdjacencyAndAltHaplotype) {
 
+            final SimpleInterval dupSeqRepeatUnitRefSpan = ((BreakpointComplications.SmallDuplicationBreakpointComplications)
+                    novelAdjacencyAndAltHaplotype.getComplication()).getDupSeqRepeatUnitRefSpan();
+
             return GATKSVVCFConstants.DUP_TAN_EXPANSION_INTERNAL_ID_START_STRING + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
-                    + novelAdjacencyAndAltHaplotype.getLeftJustifiedLeftRefLoc().getContig() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
-                    + novelAdjacencyAndAltHaplotype.getLeftJustifiedLeftRefLoc().getEnd() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
-                    + novelAdjacencyAndAltHaplotype.getLeftJustifiedRightRefLoc().getStart();
+                    + makeLocationPartOfID(dupSeqRepeatUnitRefSpan.getContig(), dupSeqRepeatUnitRefSpan.getStart(),
+                    dupSeqRepeatUnitRefSpan.getContig(), dupSeqRepeatUnitRefSpan.getEnd());
         }
     }
 
@@ -194,9 +194,7 @@ public abstract class SimpleSVType extends SvType {
 
         private static String getIDString(final NovelAdjacencyAndAltHaplotype novelAdjacencyAndAltHaplotype) {
             return GATKSVVCFConstants.DUP_INV_INTERNAL_ID_START_STRING + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
-                    + novelAdjacencyAndAltHaplotype.getLeftJustifiedLeftRefLoc().getContig() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
-                    + novelAdjacencyAndAltHaplotype.getLeftJustifiedLeftRefLoc().getEnd() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
-                    + novelAdjacencyAndAltHaplotype.getLeftJustifiedRightRefLoc().getStart();
+                    + makeLocationPartOfID(novelAdjacencyAndAltHaplotype);
         }
     }
 

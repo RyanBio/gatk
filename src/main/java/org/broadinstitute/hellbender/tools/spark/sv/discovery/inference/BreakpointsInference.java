@@ -1,5 +1,6 @@
 package org.broadinstitute.hellbender.tools.spark.sv.discovery.inference;
 
+import com.google.common.annotations.VisibleForTesting;
 import htsjdk.samtools.Cigar;
 import htsjdk.samtools.CigarOperator;
 import htsjdk.samtools.SAMSequenceDictionary;
@@ -33,7 +34,8 @@ import java.util.List;
  *     </li>
  * </ul>
  */
-abstract class BreakpointsInference {
+@VisibleForTesting
+public abstract class BreakpointsInference {
 
     protected String upstreamBreakpointRefContig;
     protected String downstreamBreakpointRefContig;
@@ -54,50 +56,42 @@ abstract class BreakpointsInference {
     }
     abstract BreakpointComplications getComplications();
 
-    protected BreakpointsInference(final SimpleChimera simpleChimera, final byte[] contigSequence) {
-        resolveComplications(simpleChimera, contigSequence);
+    protected BreakpointsInference(final SimpleChimera simpleChimera, final byte[] contigSequence, final SAMSequenceDictionary referenceDictionary) {
+        resolveComplications(simpleChimera, contigSequence, referenceDictionary);
     }
 
-    protected void validateInferredLocations(final SimpleChimera ca,
-                                             final SAMSequenceDictionary referenceSequenceDictionary) {
+    static void validateInferredLocations(final SimpleInterval leftBreakpoint,
+                                          final SimpleInterval rightBreakpoint,
+                                          final SAMSequenceDictionary referenceSequenceDictionary,
+                                          final String errorMessage) {
 
-        final Tuple2<SimpleInterval, SimpleInterval> leftJustifiedBreakpoints = getLeftJustifiedBreakpoints();
-        final SimpleInterval leftBreakpoint = leftJustifiedBreakpoints._1,
-                             rightBreakpoint = leftJustifiedBreakpoints._2;
         if ( IntervalUtils.isBefore(rightBreakpoint, leftBreakpoint, referenceSequenceDictionary) ) {
-            throw new GATKException("Inferred novel adjacency reference locations have left location after right location : left " +
-                    leftBreakpoint + "\tright " + rightBreakpoint + "\t"  + ca.toString() + "\n" + getComplications().toString());
+            throw new GATKException.ShouldNeverReachHereException("Inferred novel adjacency reference locations have left location after right location." + errorMessage);
         }
 
         if ( leftBreakpoint.getEnd() > referenceSequenceDictionary.getSequence(leftBreakpoint.getContig()).getSequenceLength() ) {
-            throw new GATKException("Inferred breakpoint beyond reference sequence length: inferred location: " + leftBreakpoint +
-                    "\tref contig length: " + referenceSequenceDictionary.getSequence(leftBreakpoint.getContig()).getSequenceLength() + "\n"
-                    + ca.toString() + "\n" + getComplications().toString());
+            throw new GATKException.ShouldNeverReachHereException("Inferred breakpoint beyond reference sequence length."  + errorMessage);
         }
 
         if ( rightBreakpoint.getEnd() > referenceSequenceDictionary.getSequence(rightBreakpoint.getContig()).getSequenceLength() ) {
-            throw new GATKException("Inferred breakpoint beyond reference sequence length: inferred location: " + rightBreakpoint +
-                    "\tref contig length: " + referenceSequenceDictionary.getSequence(rightBreakpoint.getContig()).getSequenceLength() + "\n"
-                    + ca.toString() + "\n" + getComplications().toString());
-        }
-
-        if (altHaplotypeSequence == null) {
-            throw new GATKException("Inferred alt haplotype sequence is null" + rightBreakpoint +
-                    "\tref contig length: " + referenceSequenceDictionary.getSequence(rightBreakpoint.getContig()).getSequenceLength() + "\n"
-                    + ca.toString() + "\n" + getComplications().toString());
+            throw new GATKException.ShouldNeverReachHereException("Inferred breakpoint beyond reference sequence length. " + errorMessage);
         }
     }
     ///////////////
-    static final BreakpointsInference getInferenceClass(final SimpleChimera simpleChimera,
-                                                        final byte[] contigSequence,
-                                                        final SAMSequenceDictionary referenceDictionary) {
+    static BreakpointsInference getInferenceClass(final SimpleChimera simpleChimera,
+                                                  final byte[] contigSequence,
+                                                  final SAMSequenceDictionary referenceDictionary) {
 
-        switch (simpleChimera.inferType()) {
-            case INTER_CHROMOSOME:
+        switch (simpleChimera.inferType(referenceDictionary)) {
+            case INTER_CHR_STRAND_SWITCH_55:
+            case INTER_CHR_STRAND_SWITCH_33:
+            case INTER_CHR_NO_SS_WITH_LEFT_MATE_FIRST_IN_PARTNER:
+            case INTER_CHR_NO_SS_WITH_LEFT_MATE_SECOND_IN_PARTNER:
                 return new InterChromosomeBreakpointsInference(simpleChimera, contigSequence, referenceDictionary);
             case INTRA_CHR_REF_ORDER_SWAP:
                 return new IntraChrRefOrderSwapBreakpointsInference(simpleChimera, contigSequence, referenceDictionary);
-            case INTRA_CHR_STRAND_SWITCH:
+            case INTRA_CHR_STRAND_SWITCH_55:
+            case INTRA_CHR_STRAND_SWITCH_33:
                 return new IntraChrStrandSwitchBreakpointInference(simpleChimera, contigSequence, referenceDictionary);
             case SIMPLE_DEL:
             case RPL:
@@ -113,12 +107,29 @@ abstract class BreakpointsInference {
         }
     }
 
-    abstract void resolveComplications(final SimpleChimera simpleChimera, final byte[] contigSequence);
+    abstract void resolveComplications(final SimpleChimera simpleChimera, final byte[] contigSequence, final SAMSequenceDictionary referenceDictionary);
+
+    @Override
+    public String toString() {
+        return "left: " + upstreamBreakpointRefContig + ":" + upstreamBreakpointRefPos +
+                " right: " + downstreamBreakpointRefContig + ":" + downstreamBreakpointRefPos +
+                " complications: " + getComplications().toString() +
+                " alt seq: " + (getInferredAltHaplotypeSequence() == null ? "NULL" : getInferredAltHaplotypeSequence()) ;
+    }
+
+    // TODO: 5/28/18 a bug exists here in location inference that when homology exists, we are implicitly assuming that the hom. seq. has no micro insertion/deletions in its alignments at breakpoints (as we are simply adding/subtracting hom. len.)
+    //       this is not a serious problem, unless the net accumulated insertion/deletion length is large (in the range of tens of bp or longer, since that affects overlap-based evaluation)
     // =================================================================================================================
 
     /**
      * Intended to be used for simple insertion, simple deletion, and replacement.
      * NOT FOR SMALL DUPLICATIONS!
+     * Alt sequence is
+     * <ul>
+     *     <li>empty for simple clean deletion,</li>
+     *     <li>inserted sequence for inserted sequence</li> todo: see todo above
+     *     <li>inserted sequence for replacement</li> todo: see todo above
+     * </ul>
      */
     final static class SimpleInsertionDeletionBreakpointsInference extends BreakpointsInference {
 
@@ -130,29 +141,26 @@ abstract class BreakpointsInference {
         }
 
         @Override
-        void resolveComplications(final SimpleChimera simpleChimera, final byte[] contigSequence) {
+        void resolveComplications(final SimpleChimera simpleChimera, final byte[] contigSequence, final SAMSequenceDictionary referenceDictionary) {
             complications =
-                    new SimpleInsDelOrReplacementBreakpointComplications(simpleChimera, contigSequence);
+                    new SimpleInsDelOrReplacementBreakpointComplications(simpleChimera, contigSequence,
+                            simpleChimera.firstContigRegionRefSpanAfterSecond(referenceDictionary));
         }
 
 
         protected SimpleInsertionDeletionBreakpointsInference (final SimpleChimera simpleChimera,
                                                                final byte[] contigSequence,
                                                                final SAMSequenceDictionary referenceDictionary) {
-            super(simpleChimera, contigSequence);
+            super(simpleChimera, contigSequence, referenceDictionary);
 
             upstreamBreakpointRefContig
                     = downstreamBreakpointRefContig
                     = simpleChimera.regionWithLowerCoordOnContig.referenceSpan.getContig();
 
-            final SimpleInterval leftReferenceInterval, rightReferenceInterval;
-            if (simpleChimera.isForwardStrandRepresentation) {
-                leftReferenceInterval  = simpleChimera.regionWithLowerCoordOnContig.referenceSpan;
-                rightReferenceInterval = simpleChimera.regionWithHigherCoordOnContig.referenceSpan;
-            } else {
-                leftReferenceInterval  = simpleChimera.regionWithHigherCoordOnContig.referenceSpan;
-                rightReferenceInterval = simpleChimera.regionWithLowerCoordOnContig.referenceSpan;
-            }
+
+            final Tuple2<SimpleInterval, SimpleInterval> coordinateSortedRefSpans = simpleChimera.getCoordinateSortedRefSpans(referenceDictionary);
+            final SimpleInterval leftReferenceInterval  = coordinateSortedRefSpans._1,
+                                 rightReferenceInterval = coordinateSortedRefSpans._2;
             final int homologyLen = complications.getHomologyForwardStrandRep().length();
             upstreamBreakpointRefPos = leftReferenceInterval.getEnd() - homologyLen;
             downstreamBreakpointRefPos = rightReferenceInterval.getStart() - 1;
@@ -163,7 +171,9 @@ abstract class BreakpointsInference {
                 altHaplotypeSequence = complications.insertedSequenceForwardStrandRep.getBytes();
             }
 
-            validateInferredLocations(simpleChimera, referenceDictionary);
+            validateInferredLocations(new SimpleInterval(upstreamBreakpointRefContig, upstreamBreakpointRefPos, upstreamBreakpointRefPos),
+                                      new SimpleInterval(downstreamBreakpointRefContig, downstreamBreakpointRefPos, downstreamBreakpointRefPos),
+                                      referenceDictionary, toString());
         }
     }
 
@@ -171,8 +181,9 @@ abstract class BreakpointsInference {
     abstract static class SmallDuplicationBreakpointsInference extends BreakpointsInference {
 
         SmallDuplicationBreakpointsInference(final SimpleChimera simpleChimera,
-                                             final byte[] contigSequence) {
-            super(simpleChimera, contigSequence);
+                                             final byte[] contigSequence,
+                                             final SAMSequenceDictionary referenceDictionary) {
+            super(simpleChimera, contigSequence, referenceDictionary);
 
             upstreamBreakpointRefContig
                     = downstreamBreakpointRefContig
@@ -180,6 +191,14 @@ abstract class BreakpointsInference {
         }
     }
 
+    /**
+     * Works for both expansion and contraction.
+     * Alt sequence is
+     * <ul>
+     *     <li>the left copy if it is contraction</li> todo: see todo above
+     *     <li>both copies if it is expansion</li> todo: see todo above
+     * </ul>
+     */
     final static class SmallDuplicationWithPreciseDupRangeBreakpointsInference extends SmallDuplicationBreakpointsInference {
         private SmallDuplicationWithPreciseDupRangeBreakpointComplications complications;
 
@@ -189,27 +208,24 @@ abstract class BreakpointsInference {
         }
 
         @Override
-        void resolveComplications(final SimpleChimera simpleChimera, final byte[] contigSequence) {
+        void resolveComplications(final SimpleChimera simpleChimera, final byte[] contigSequence, final SAMSequenceDictionary referenceDictionary) {
             complications =
-                    new SmallDuplicationWithPreciseDupRangeBreakpointComplications(simpleChimera, contigSequence);
+                    new SmallDuplicationWithPreciseDupRangeBreakpointComplications(simpleChimera, contigSequence,
+                            simpleChimera.firstContigRegionRefSpanAfterSecond(referenceDictionary));
         }
 
         SmallDuplicationWithPreciseDupRangeBreakpointsInference(final SimpleChimera simpleChimera,
                                                                 final byte[] contigSequence,
                                                                 final SAMSequenceDictionary referenceDictionary) {
-            super(simpleChimera, contigSequence);
+            super(simpleChimera, contigSequence, referenceDictionary);
 
             final int homologyLen = complications.getHomologyForwardStrandRep().length();
             final DistancesBetweenAlignmentsOnRefAndOnRead distances = simpleChimera.getDistancesBetweenAlignmentsOnRefAndOnRead();
 
-            final SimpleInterval leftReferenceInterval, rightReferenceInterval;
-            if (simpleChimera.isForwardStrandRepresentation) {
-                leftReferenceInterval  = simpleChimera.regionWithLowerCoordOnContig.referenceSpan;
-                rightReferenceInterval = simpleChimera.regionWithHigherCoordOnContig.referenceSpan;
-            } else {
-                leftReferenceInterval  = simpleChimera.regionWithHigherCoordOnContig.referenceSpan;
-                rightReferenceInterval = simpleChimera.regionWithLowerCoordOnContig.referenceSpan;
-            }
+
+            final Tuple2<SimpleInterval, SimpleInterval> coordinateSortedRefSpans = simpleChimera.getCoordinateSortedRefSpans(referenceDictionary);
+            final SimpleInterval leftReferenceInterval  = coordinateSortedRefSpans._1,
+                                 rightReferenceInterval = coordinateSortedRefSpans._2;
 
             if ( complications.isDupContraction() ) {
                 upstreamBreakpointRefPos = leftReferenceInterval.getEnd() - homologyLen;
@@ -250,10 +266,16 @@ abstract class BreakpointsInference {
                 }
             }
 
-            validateInferredLocations(simpleChimera, referenceDictionary);
+            validateInferredLocations(new SimpleInterval(upstreamBreakpointRefContig, upstreamBreakpointRefPos, upstreamBreakpointRefPos),
+                    new SimpleInterval(downstreamBreakpointRefContig, downstreamBreakpointRefPos, downstreamBreakpointRefPos),
+                    referenceDictionary, toString());
         }
     }
 
+    /**
+     * Similar to {@link SmallDuplicationWithPreciseDupRangeBreakpointsInference},
+     * except that the cigars are not available as the duplicated region is estimated.
+     */
     final static class SmallDuplicationWithImpreciseDupRangeBreakpointsInference extends SmallDuplicationBreakpointsInference {
         private SmallDuplicationWithImpreciseDupRangeBreakpointComplications complications;
 
@@ -264,27 +286,24 @@ abstract class BreakpointsInference {
 
 
         @Override
-        void resolveComplications(final SimpleChimera simpleChimera, final byte[] contigSequence) {
+        void resolveComplications(final SimpleChimera simpleChimera, final byte[] contigSequence, final SAMSequenceDictionary referenceDictionary) {
             complications =
-                    new SmallDuplicationWithImpreciseDupRangeBreakpointComplications(simpleChimera, contigSequence);
+                    new SmallDuplicationWithImpreciseDupRangeBreakpointComplications(simpleChimera, contigSequence,
+                            simpleChimera.firstContigRegionRefSpanAfterSecond(referenceDictionary));
         }
 
         SmallDuplicationWithImpreciseDupRangeBreakpointsInference(final SimpleChimera simpleChimera,
                                                                   final byte[] contigSequence,
                                                                   final SAMSequenceDictionary referenceDictionary) {
-            super(simpleChimera, contigSequence);
+            super(simpleChimera, contigSequence, referenceDictionary);
 
             final DistancesBetweenAlignmentsOnRefAndOnRead distances = simpleChimera.getDistancesBetweenAlignmentsOnRefAndOnRead();
 
             final int homologyLen = complications.getHomologyForwardStrandRep().length();
-            final SimpleInterval leftReferenceInterval, rightReferenceInterval;
-            if (simpleChimera.isForwardStrandRepresentation) {
-                leftReferenceInterval  = simpleChimera.regionWithLowerCoordOnContig.referenceSpan;
-                rightReferenceInterval = simpleChimera.regionWithHigherCoordOnContig.referenceSpan;
-            } else {
-                leftReferenceInterval  = simpleChimera.regionWithHigherCoordOnContig.referenceSpan;
-                rightReferenceInterval = simpleChimera.regionWithLowerCoordOnContig.referenceSpan;
-            }
+
+            final Tuple2<SimpleInterval, SimpleInterval> coordinateSortedRefSpans = simpleChimera.getCoordinateSortedRefSpans(referenceDictionary);
+            final SimpleInterval leftReferenceInterval  = coordinateSortedRefSpans._1,
+                                 rightReferenceInterval = coordinateSortedRefSpans._2;
             // PLAN: (note both d_r and d_a < 0; the docs use 1-based coordinate)
             //  For contraction: |d_r| < |d_a|
             //      ALT_SEQ: extract sequence [c2b, c1e], RC if '-'-representation
@@ -315,7 +334,7 @@ abstract class BreakpointsInference {
                 int distOnRead = SvCigarUtils
                         .computeAssociatedDistOnRead(cigar,
                                 distances.firstAlnCtgEnd - hardClipOffset,
-                                -distances.distBetweenAlignRegionsOnRef,
+                                -distances.gapBetweenAlignRegionsOnRef,
                                 true);
                 final int zeroBasedStart = distances.firstAlnCtgEnd - distOnRead;
 
@@ -324,7 +343,7 @@ abstract class BreakpointsInference {
                 distOnRead = SvCigarUtils
                         .computeAssociatedDistOnRead(cigar,
                                 distances.secondAlnCtgStart - hardClipOffset,
-                                -distances.distBetweenAlignRegionsOnRef,
+                                -distances.gapBetweenAlignRegionsOnRef,
                                 false);
                 final int zeroBasedEnd = distances.secondAlnCtgStart + distOnRead - 1;
 
@@ -334,7 +353,9 @@ abstract class BreakpointsInference {
                 }
             }
 
-            validateInferredLocations(simpleChimera, referenceDictionary);
+            validateInferredLocations(new SimpleInterval(upstreamBreakpointRefContig, upstreamBreakpointRefPos, upstreamBreakpointRefPos),
+                    new SimpleInterval(downstreamBreakpointRefContig, downstreamBreakpointRefPos, downstreamBreakpointRefPos),
+                    referenceDictionary, toString());
         }
     }
 
@@ -343,7 +364,7 @@ abstract class BreakpointsInference {
         protected BNDTypeBreakpointsInference(final SimpleChimera simpleChimera,
                                               final byte[] contigSequence,
                                               final SAMSequenceDictionary referenceDictionary) {
-            super(simpleChimera, contigSequence);
+            super(simpleChimera, contigSequence, referenceDictionary);
         }
     }
 
@@ -357,8 +378,9 @@ abstract class BreakpointsInference {
         }
 
         @Override
-        void resolveComplications(final SimpleChimera simpleChimera, final byte[] contigSequence) {
-            complications = new IntraChrStrandSwitchBreakpointComplications(simpleChimera, contigSequence);
+        void resolveComplications(final SimpleChimera simpleChimera, final byte[] contigSequence, final SAMSequenceDictionary referenceDictionary) {
+            complications = new IntraChrStrandSwitchBreakpointComplications(simpleChimera, contigSequence,
+                    simpleChimera.firstContigRegionRefSpanAfterSecond(referenceDictionary));
         }
 
         IntraChrStrandSwitchBreakpointInference(final SimpleChimera simpleChimera,
@@ -380,16 +402,18 @@ abstract class BreakpointsInference {
 
                 final int homologyLen = complications.getHomologyForwardStrandRep().length();
 
-                final AlignmentInterval one = simpleChimera.regionWithLowerCoordOnContig,
-                                        two = simpleChimera.regionWithHigherCoordOnContig;
-                final SimpleInterval leftReferenceInterval, rightReferenceInterval;
-                if (simpleChimera.isForwardStrandRepresentation) {
-                    leftReferenceInterval  = one.referenceSpan;
-                    rightReferenceInterval = two.referenceSpan;
-                } else {
-                    leftReferenceInterval  = two.referenceSpan;
-                    rightReferenceInterval = one.referenceSpan;
-                }
+                final Tuple2<SimpleInterval, SimpleInterval> coordinateSortedRefSpans = simpleChimera.getCoordinateSortedRefSpans(referenceDictionary);
+//                final AlignmentInterval one = simpleChimera.regionWithLowerCoordOnContig,
+//                                        two = simpleChimera.regionWithHigherCoordOnContig;
+                final SimpleInterval leftReferenceInterval  = coordinateSortedRefSpans._1,
+                                     rightReferenceInterval = coordinateSortedRefSpans._2;
+//                if (simpleChimera.isForwardStrandRepresentation) {
+//                    leftReferenceInterval  = one.referenceSpan;
+//                    rightReferenceInterval = two.referenceSpan;
+//                } else {
+//                    leftReferenceInterval  = two.referenceSpan;
+//                    rightReferenceInterval = one.referenceSpan;
+//                }
                 if (simpleChimera.strandSwitch == StrandSwitch.FORWARD_TO_REVERSE){
                     upstreamBreakpointRefPos = leftReferenceInterval.getEnd() - homologyLen;
                     downstreamBreakpointRefPos = rightReferenceInterval.getEnd();
@@ -405,7 +429,9 @@ abstract class BreakpointsInference {
                 altHaplotypeSequence = complications.insertedSequenceForwardStrandRep.getBytes();
             }
 
-            validateInferredLocations(simpleChimera, referenceDictionary);
+            validateInferredLocations(new SimpleInterval(upstreamBreakpointRefContig, upstreamBreakpointRefPos, upstreamBreakpointRefPos),
+                    new SimpleInterval(downstreamBreakpointRefContig, downstreamBreakpointRefPos, downstreamBreakpointRefPos),
+                    referenceDictionary, toString());
         }
 
         private static byte[] extractAltHaplotypeForInvDup(final SimpleChimera simpleChimera, final byte[] contigSeq) {
@@ -478,9 +504,9 @@ abstract class BreakpointsInference {
         }
 
         @Override
-        void resolveComplications(final SimpleChimera simpleChimera,
-                                  final byte[] contigSequence) {
-            complications = new IntraChrRefOrderSwapBreakpointComplications(simpleChimera, contigSequence);
+        void resolveComplications(final SimpleChimera simpleChimera, final byte[] contigSequence, final SAMSequenceDictionary referenceDictionary) {
+            complications = new IntraChrRefOrderSwapBreakpointComplications(simpleChimera, contigSequence,
+                    simpleChimera.firstContigRegionRefSpanAfterSecond(referenceDictionary));
         }
 
         IntraChrRefOrderSwapBreakpointsInference(final SimpleChimera simpleChimera,
@@ -489,16 +515,18 @@ abstract class BreakpointsInference {
             super(simpleChimera, contigSequence, referenceDictionary);
 
             final int homologyLen = complications.getHomologyForwardStrandRep().length();
-            final AlignmentInterval one = simpleChimera.regionWithLowerCoordOnContig,
-                    two = simpleChimera.regionWithHigherCoordOnContig;
-            final SimpleInterval leftRefSpan, rightRefSpan;
-            if (simpleChimera.isForwardStrandRepresentation) {
-                leftRefSpan  = two.referenceSpan;
-                rightRefSpan = one.referenceSpan;
-            } else {
-                leftRefSpan  = one.referenceSpan;
-                rightRefSpan = two.referenceSpan;
-            }
+//            final AlignmentInterval one = simpleChimera.regionWithLowerCoordOnContig,
+//                    two = simpleChimera.regionWithHigherCoordOnContig;
+            final Tuple2<SimpleInterval, SimpleInterval> coordinateSortedRefSpans = simpleChimera.getCoordinateSortedRefSpans(referenceDictionary);
+            final SimpleInterval leftRefSpan  = coordinateSortedRefSpans._1,
+                                 rightRefSpan = coordinateSortedRefSpans._2;
+//            if (simpleChimera.isForwardStrandRepresentation) {
+//                leftRefSpan  = two.referenceSpan;
+//                rightRefSpan = one.referenceSpan;
+//            } else {
+//                leftRefSpan  = one.referenceSpan;
+//                rightRefSpan = two.referenceSpan;
+//            }
             upstreamBreakpointRefContig
                     = downstreamBreakpointRefContig
                     = simpleChimera.regionWithLowerCoordOnContig.referenceSpan.getContig();
@@ -511,7 +539,9 @@ abstract class BreakpointsInference {
                 altHaplotypeSequence = complications.insertedSequenceForwardStrandRep.getBytes();
             }
 
-            validateInferredLocations(simpleChimera, referenceDictionary);
+            validateInferredLocations(new SimpleInterval(upstreamBreakpointRefContig, upstreamBreakpointRefPos, upstreamBreakpointRefPos),
+                    new SimpleInterval(downstreamBreakpointRefContig, downstreamBreakpointRefPos, downstreamBreakpointRefPos),
+                    referenceDictionary, toString());
         }
     }
 
@@ -529,9 +559,10 @@ abstract class BreakpointsInference {
         }
 
         @Override
-        void resolveComplications(final SimpleChimera simpleChimera,
-                                  final byte[] contigSequence) {
-            complications = new InterChromosomeBreakpointComplications(simpleChimera, contigSequence);
+        void resolveComplications(final SimpleChimera simpleChimera, final byte[] contigSequence,
+                                  final SAMSequenceDictionary referenceDictionary) {
+            complications = new InterChromosomeBreakpointComplications(simpleChimera, contigSequence,
+                    simpleChimera.firstContigRegionRefSpanAfterSecond(referenceDictionary));
         }
 
         InterChromosomeBreakpointsInference(final SimpleChimera simpleChimera,
@@ -549,7 +580,9 @@ abstract class BreakpointsInference {
                 altHaplotypeSequence = complications.insertedSequenceForwardStrandRep.getBytes();
             }
 
-            validateInferredLocations(simpleChimera, referenceDictionary);
+            validateInferredLocations(new SimpleInterval(upstreamBreakpointRefContig, upstreamBreakpointRefPos, upstreamBreakpointRefPos),
+                    new SimpleInterval(downstreamBreakpointRefContig, downstreamBreakpointRefPos, downstreamBreakpointRefPos),
+                    referenceDictionary, toString());
         }
 
         private void extractRefPositions(final SimpleChimera ca,
@@ -576,7 +609,7 @@ abstract class BreakpointsInference {
                         upstreamBreakpointRefPos = ca.regionWithLowerCoordOnContig.referenceSpan.getStart();
                         downstreamBreakpointRefPos = ca.regionWithHigherCoordOnContig.referenceSpan.getStart() + homologyLen;
                         break;
-                    default: throw new GATKException("Unseen strand switch case for: " + ca.toString());
+                    default: throw new GATKException.ShouldNeverReachHereException("Unseen strand switch case for: " + ca.toString());
                 }
             } else {
                 switch (ca.strandSwitch) {
@@ -597,7 +630,7 @@ abstract class BreakpointsInference {
                         upstreamBreakpointRefPos = ca.regionWithHigherCoordOnContig.referenceSpan.getStart();
                         downstreamBreakpointRefPos = ca.regionWithLowerCoordOnContig.referenceSpan.getStart() + homologyLen;
                         break;
-                    default: throw new GATKException("Unseen strand switch case for: " + ca.toString());
+                    default: throw new GATKException.ShouldNeverReachHereException("Unseen strand switch case for: " + ca.toString());
                 }
             }
         }
@@ -620,7 +653,7 @@ abstract class BreakpointsInference {
                 case FORWARD_TO_REVERSE: case REVERSE_TO_FORWARD:
                     return ca.isForwardStrandRepresentation;
                 default:
-                    throw new GATKException("Unseen strand switch case for: " + ca.toString());
+                    throw new GATKException.ShouldNeverReachHereException("Unseen strand switch case for: " + ca.toString());
             }
         }
     }

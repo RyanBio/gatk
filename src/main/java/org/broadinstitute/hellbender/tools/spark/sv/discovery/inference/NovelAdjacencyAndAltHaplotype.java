@@ -8,6 +8,7 @@ import com.google.common.annotations.VisibleForTesting;
 import htsjdk.samtools.SAMSequenceDictionary;
 import org.broadinstitute.hellbender.engine.datasources.ReferenceMultiSource;
 import org.broadinstitute.hellbender.exceptions.GATKException;
+import org.broadinstitute.hellbender.tools.spark.sv.StructuralVariationDiscoveryArgumentCollection;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.BreakEndVariantType;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.SimpleSVType;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.SvType;
@@ -47,6 +48,18 @@ public class NovelAdjacencyAndAltHaplotype {
     private final TypeInferredFromSimpleChimera type;
     private final byte[] altHaplotypeSequence;
 
+    @VisibleForTesting
+    public NovelAdjacencyAndAltHaplotype(final SimpleInterval leftJustifiedLeftRefLoc, final SimpleInterval leftJustifiedRightRefLoc,
+                                         final StrandSwitch strandSwitch, final BreakpointComplications complication,
+                                         final TypeInferredFromSimpleChimera type, final byte[] altHaplotypeSequence) {
+        this.leftJustifiedLeftRefLoc = leftJustifiedLeftRefLoc;
+        this.leftJustifiedRightRefLoc = leftJustifiedRightRefLoc;
+        this.strandSwitch = strandSwitch;
+        this.complication = complication;
+        this.type = type;
+        this.altHaplotypeSequence = altHaplotypeSequence;
+    }
+
     public NovelAdjacencyAndAltHaplotype(final SimpleChimera simpleChimera, final byte[] contigSequence,
                                          final SAMSequenceDictionary referenceDictionary) {
 
@@ -63,7 +76,7 @@ public class NovelAdjacencyAndAltHaplotype {
 
             complication = inferredClass.getComplications();
 
-            type = simpleChimera.inferType();
+            type = simpleChimera.inferType(referenceDictionary);
 
             altHaplotypeSequence = inferredClass.getInferredAltHaplotypeSequence();
 
@@ -184,7 +197,8 @@ public class NovelAdjacencyAndAltHaplotype {
     /**
      * @return the inferred type could be
      *          1) a single entry for simple variants, or
-     *          2) a list of two entries for "replacement" case where the ref- and alt- path are both >= {@link STRUCTURAL_VARIANT_SIZE_LOWER_BOUND} bp long, or
+     *          2) a list of two entries for "replacement" case where the ref- and alt- path are both >=
+     *             {@link StructuralVariationDiscoveryArgumentCollection#STRUCTURAL_VARIANT_SIZE_LOWER_BOUND} bp long, or
      *          3) a list of two entries with BND mates.
      *          It is safe, for now, to assume that ({@link SimpleSVType} and {@link BreakEndVariantType} are never mixed)
      */
@@ -192,21 +206,38 @@ public class NovelAdjacencyAndAltHaplotype {
     public List<SvType> toSimpleOrBNDTypes(final ReferenceMultiSource reference, final SAMSequenceDictionary referenceDictionary) {
 
         switch (type) {
-            case INTER_CHROMOSOME:
-            case INTRA_CHR_REF_ORDER_SWAP:
+            case INTER_CHR_STRAND_SWITCH_55:
+            case INTER_CHR_STRAND_SWITCH_33:
+            case INTER_CHR_NO_SS_WITH_LEFT_MATE_FIRST_IN_PARTNER:
+            case INTER_CHR_NO_SS_WITH_LEFT_MATE_SECOND_IN_PARTNER:
+            {
                 final Tuple2<BreakEndVariantType, BreakEndVariantType> orderedMatesForTranslocSuspect =
-                        BreakEndVariantType.TransLocBND.getOrderedMates(this, reference, referenceDictionary);
+                        BreakEndVariantType.InterChromosomeBreakend.getOrderedMates(this, reference);
                 return Arrays.asList(orderedMatesForTranslocSuspect._1, orderedMatesForTranslocSuspect._2);
-            case INTRA_CHR_STRAND_SWITCH:
-                if ( complication.indicatesRefSeqDuplicatedOnAlt() ) {
+            }
+            case INTRA_CHR_REF_ORDER_SWAP:
+            {
+                final Tuple2<BreakEndVariantType, BreakEndVariantType> orderedMatesForTranslocSuspect =
+                        BreakEndVariantType.IntraChromosomeRefOrderSwap.getOrderedMates(this, reference);
+                return Arrays.asList(orderedMatesForTranslocSuspect._1, orderedMatesForTranslocSuspect._2);
+            }
+            case INTRA_CHR_STRAND_SWITCH_55:
+            case INTRA_CHR_STRAND_SWITCH_33:
+                if ( complication.indicatesRefSeqDuplicatedOnAlt() ) { // inverted duplication
                     final int svLength =
                             ((BreakpointComplications.IntraChrStrandSwitchBreakpointComplications) this.getComplication())
                                     .getDupSeqRepeatUnitRefSpan().size();
                     return Collections.singletonList( new SimpleSVType.DuplicationInverted(this, svLength) );
                 } else {
-                    final Tuple2<BreakEndVariantType, BreakEndVariantType> orderedMatesForInversionSuspect =
-                            BreakEndVariantType.InvSuspectBND.getOrderedMates(this, reference);
-                    return Arrays.asList(orderedMatesForInversionSuspect._1, orderedMatesForInversionSuspect._2);
+                    if (strandSwitch.equals(StrandSwitch.FORWARD_TO_REVERSE)) {
+                        final Tuple2<BreakEndVariantType, BreakEndVariantType> orderedMatesForInversionSuspect =
+                                BreakEndVariantType.IntraChromosomalStrandSwitch55BreakEnd.getOrderedMates(this, reference);
+                        return Arrays.asList(orderedMatesForInversionSuspect._1, orderedMatesForInversionSuspect._2);
+                    } else {
+                        final Tuple2<BreakEndVariantType, BreakEndVariantType> orderedMatesForInversionSuspect =
+                                BreakEndVariantType.IntraChromosomalStrandSwitch33BreakEnd.getOrderedMates(this, reference);
+                        return Arrays.asList(orderedMatesForInversionSuspect._1, orderedMatesForInversionSuspect._2);
+                    }
                 }
             case SIMPLE_DEL:
             {
